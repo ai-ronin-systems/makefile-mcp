@@ -1,0 +1,108 @@
+[build-system]
+requires = ["hatchling==1.31.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "makefile-mcp"
+dynamic = ["version"]
+description = "Expose trusted GNU Make targets to MCP with zero-config discovery and optional governed execution."
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "Apache-2.0"}
+authors = [{name = "AI Ronin"}]
+maintainers = [{name = "AI Ronin"}]
+keywords = [
+  "mcp",
+  "model-context-protocol",
+  "makefile",
+  "gnu-make",
+  "ai-agents",
+  "developer-tools",
+  "automation",
+  "security",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Software Development :: Build Tools",
+]
+dependencies = [
+  "mcp==2.0.0",
+  "pydantic>=2.10,<3",
+  "PyYAML>=6.0,<7",
+  "typer>=0.16,<1",
+]
+
+[project.urls]
+Homepage = "https://github.com/ai-ronin-systems/makefile-mcp"
+Repository = "https://github.com/ai-ronin-systems/makefile-mcp"
+Issues = "https://github.com/ai-ronin-systems/makefile-mcp/issues"
+Changelog = "https://github.com/ai-ronin-systems/makefile-mcp/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/ai-ronin-systems/makefile-mcp/tree/main/docs"
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.3,<9",
+  "pytest-asyncio>=0.25,<1",
+  "coverage==7.15.4",
+  "ruff>=0.11,<1",
+]
+
+[project.scripts]
+makefile-mcp = "makefile_mcp.cli:main"
+
+
+[tool.hatch.version]
+path = "src/makefile_mcp/version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/makefile_mcp"]
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+  "/.venv",
+  "/.venv*",
+]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+asyncio_mode = "auto"
+filterwarnings = [
+  "error::pytest.PytestUnraisableExceptionWarning",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.coverage.run]
+branch = true
+source = ["makefile_mcp"]
+parallel = true
+patch = ["subprocess"]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 85
+
+
+[tool.pyright]
+include = ["src/makefile_mcp"]
+pythonVersion = "3.11"
+typeCheckingMode = "standard"
+venvPath = "."
+venv = ".venv"
+reportMissingTypeStubs = false

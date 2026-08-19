@@ -1,0 +1,47 @@
+schema_version: 1
+
+defaults:
+  timeout_seconds: 1800
+  output_limit_bytes: 1048576
+  input_limit_bytes: 1048576
+
+tasks:
+  format-check:
+    risk: safe
+    description: Check Python formatting without modifying files
+
+  lint:
+    risk: safe
+    description: Run Ruff lint checks
+
+  test:
+    risk: safe
+    description: Run the complete test suite
+
+  test-unit:
+    risk: safe
+    description: Run unit tests
+
+  test-integration:
+    risk: safe
+    description: Run integration tests
+
+  test-security:
+    risk: safe
+    description: Run request-boundary security regression tests
+
+  coverage:
+    risk: write
+    description: Run branch-aware coverage and enforce the project floor
+
+  check:
+    risk: write
+    description: Run the local release-blocking validation gate
+
+  package:
+    risk: write
+    description: Build the wheel and source distribution
+
+capabilities:
+  verify: check
+  package: package
