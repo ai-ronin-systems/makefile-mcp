@@ -1,0 +1,6 @@
+schema_version: 1
+tasks:
+  show:
+    variables:
+      MODULE:
+        type: token

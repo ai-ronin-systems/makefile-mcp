@@ -1,0 +1,25 @@
+# Local environments and caches
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+
+# Build/package output
+build/
+dist/
+*.egg-info/
+
+# Runtime state
+.make-mcp/locks/
+
+# Local editor/OS noise
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*~
+
+# Local secrets/config overrides
+.env
+.env.*
+!.env.example

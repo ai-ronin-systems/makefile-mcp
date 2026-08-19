@@ -1,0 +1,13 @@
+schema_version: 1
+contexts:
+  backend:
+    directory: backend
+  frontend:
+    directory: frontend
+tasks:
+  status:
+    contexts: [root]
+    risk: safe
+  test:
+    contexts: [backend, frontend]
+    risk: safe
