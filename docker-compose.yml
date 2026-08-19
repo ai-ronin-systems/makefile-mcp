@@ -1,0 +1,12 @@
+services:
+  make-mcp:
+    build: .
+    image: make-mcp:local
+    user: "${UID:-1000}:${GID:-1000}"
+    working_dir: /workspace
+    environment:
+      HOME: /tmp
+    volumes:
+      - .:/workspace
+    stdin_open: true
+    command: ["serve"]

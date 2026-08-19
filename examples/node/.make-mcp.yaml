@@ -1,0 +1,7 @@
+schema_version: 1
+tasks:
+  build:
+    risk: write
+capabilities:
+  verify: test
+  package: build

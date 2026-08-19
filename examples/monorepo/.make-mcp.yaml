@@ -1,0 +1,6 @@
+schema_version: 1
+contexts:
+  backend:
+    directory: backend
+  frontend:
+    directory: frontend

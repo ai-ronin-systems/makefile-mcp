@@ -1,0 +1,6 @@
+schema_version: 1
+tasks:
+  image:
+    risk: write
+  smoke:
+    timeout_seconds: 120
