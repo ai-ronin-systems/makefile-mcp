@@ -11,10 +11,11 @@ SHELL := /bin/bash
 
 # Tooling ------------------------------------------------------
 UV ?= uv
+UV_DEV_RUN := $(UV) run --extra dev
 DOCKER ?= docker
 DOCKER_COMPOSE ?= docker compose
 IMAGE ?= make-mcp:local
-PYTEST ?= $(UV) run pytest
+PYTEST ?= $(UV_DEV_RUN) python -m pytest
 PYTEST_ARGS ?=
 PYTEST_BASE := PYTEST_ADDOPTS= $(PYTEST) -c pyproject.toml
 
@@ -132,13 +133,13 @@ lock: prerequisites ## Refresh uv.lock from pyproject.toml
 ##@Quality
 
 format: ## Format Python sources and tests with Ruff
-	$(UV) run ruff format .
+	$(UV_DEV_RUN) ruff format .
 
 format-check: ## Check formatting without modifying files
-	$(UV) run ruff format --check .
+	$(UV_DEV_RUN) ruff format --check .
 
 lint: ## Run Ruff lint checks
-	$(UV) run ruff check .
+	$(UV_DEV_RUN) ruff check .
 
 ##@Tests
 

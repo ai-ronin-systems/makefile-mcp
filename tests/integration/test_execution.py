@@ -164,3 +164,49 @@ async def test_preview_uses_make_dry_run_without_executing_normal_recipe(app_for
     assert result.preview is True
     assert "touch preview-marker" in result.stdout
     assert not (app.root / "preview-marker").exists()
+
+
+def test_subprocess_transport_is_closed_before_asyncio_run_loop_teardown(tmp_path):
+    """A completed JMIM process must not leave asyncio pipe transports for GC after loop close."""
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    source_root = Path(__file__).parents[2] / "src"
+    script = """
+import asyncio
+import gc
+import sys
+from pathlib import Path
+
+from make_mcp.process import SubprocessRunner
+
+unraisable = []
+sys.unraisablehook = lambda args: unraisable.append(args)
+
+async def main():
+    result = await SubprocessRunner().run(
+        argv=["sh", "-c", "printf ok"],
+        cwd=Path.cwd(),
+        timeout_seconds=5,
+        env={"PATH": "/usr/bin:/bin"},
+        output_limit_bytes=1024,
+    )
+    assert result.stdout == "ok"
+
+asyncio.run(main())
+gc.collect()
+assert not unraisable, [str(item.exc_value) for item in unraisable]
+"""
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(source_root)
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=tmp_path,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr

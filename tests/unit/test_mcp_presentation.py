@@ -11,7 +11,9 @@ def test_presentation_has_exactly_three_modes():
 
 def test_direct_tool_name_is_readable_and_context_scoped():
     assert direct_tool_base_name(TaskDefinition(name="test")) == "make_test"
-    assert direct_tool_base_name(TaskDefinition(name="test", context="backend")) == "make_backend_test"
+    assert (
+        direct_tool_base_name(TaskDefinition(name="test", context="backend")) == "make_backend_test"
+    )
     assert direct_tool_base_name(TaskDefinition(name="lint:all")) == "make_lint_all"
 
 

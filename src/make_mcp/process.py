@@ -3,6 +3,7 @@
 import asyncio
 import os
 import signal
+from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -54,17 +55,13 @@ async def _terminate_process_tree(
         return
 
     if process.returncode is None:
-        try:
+        with suppress(TimeoutError):
             await asyncio.wait_for(process.wait(), timeout=grace_seconds)
-        except TimeoutError:
-            pass
 
     # Once the leader has exited (or the TERM grace expired), escalate any remaining members.
     # Waiting only for the leader is not proof that the whole process group stopped.
-    try:
+    with suppress(ProcessLookupError):
         os.killpg(process.pid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
     if process.returncode is None:
         await process.wait()
 
@@ -79,10 +76,8 @@ async def _terminate_residual_process_group(
     except ProcessLookupError:
         return
     await asyncio.sleep(grace_seconds)
-    try:
+    with suppress(ProcessLookupError):
         os.killpg(process_group_id, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
 
 
 async def _finish_reader(
@@ -95,6 +90,21 @@ async def _finish_reader(
     except TimeoutError:
         task.cancel()
         return await task
+
+
+async def _close_process_transport(process: asyncio.subprocess.Process) -> None:
+    """Close asyncio's subprocess transport before its event loop can be torn down.
+
+    ``asyncio.subprocess.Process`` exposes no public ``close()`` method. CPython otherwise
+    relies on transport finalization, which can run after ``asyncio.run()`` has closed its
+    loop and emit ``BaseSubprocessTransport.__del__`` warnings on Python 3.12.
+    """
+    transport = getattr(process, "_transport", None)
+    if transport is None:
+        return
+    transport.close()
+    # Let pipe connection_lost callbacks run while the event loop is still alive.
+    await asyncio.sleep(0)
 
 
 class SubprocessRunner:
@@ -133,36 +143,45 @@ class SubprocessRunner:
         timed_out = False
         cancelled_error: asyncio.CancelledError | None = None
         try:
-            await asyncio.wait_for(process.wait(), timeout=timeout_seconds)
-        except TimeoutError:
-            timed_out = True
-            await _terminate_process_tree(process)
-        except asyncio.CancelledError as exc:
-            # Cancellation is a control-flow signal, not a TaskResult outcome. Clean the whole
-            # normal process group and bounded pipe readers, then re-raise so MCP/embedding
-            # callers observe cancellation instead of a false successful tool completion.
-            cancelled_error = exc
-            await _terminate_process_tree(process)
+            try:
+                await asyncio.wait_for(process.wait(), timeout=timeout_seconds)
+            except TimeoutError:
+                timed_out = True
+                await _terminate_process_tree(process)
+            except asyncio.CancelledError as exc:
+                # Cancellation is a control-flow signal, not a TaskResult outcome. Clean the
+                # normal process group and bounded pipe readers, then re-raise so MCP/embedding
+                # callers observe cancellation instead of a false successful tool completion.
+                cancelled_error = exc
+                await _terminate_process_tree(process)
 
-        if not timed_out and cancelled_error is None:
-            # A successful Make process may leave recipe-spawned background children in its
-            # process group. JMIM tasks are bounded foreground jobs, not daemon launchers.
-            await _terminate_residual_process_group(process.pid)
+            if not timed_out and cancelled_error is None:
+                # A successful Make process may leave recipe-spawned background children in its
+                # process group. JMIM tasks are bounded foreground jobs, not daemon launchers.
+                await _terminate_residual_process_group(process.pid)
 
-        # Always bound final pipe draining. Even a recipe that exits successfully can spawn a
-        # detached process that inherits stdout/stderr and otherwise keeps these readers alive.
-        stdout, out_truncated = await _finish_reader(stdout_task)
-        stderr, err_truncated = await _finish_reader(stderr_task)
-        if cancelled_error is not None:
-            raise cancelled_error
+            # Always bound final pipe draining. Even a recipe that exits successfully can spawn a
+            # detached process that inherits stdout/stderr and otherwise keeps readers alive.
+            stdout, out_truncated = await _finish_reader(stdout_task)
+            stderr, err_truncated = await _finish_reader(stderr_task)
+            if cancelled_error is not None:
+                raise cancelled_error
 
-        completed = datetime.now(UTC)
-        return ProcessResult(
-            exit_code=process.returncode,
-            stdout=stdout,
-            stderr=stderr,
-            timed_out=timed_out,
-            truncated=out_truncated or err_truncated,
-            started_at=started,
-            completed_at=completed,
-        )
+            completed = datetime.now(UTC)
+            return ProcessResult(
+                exit_code=process.returncode,
+                stdout=stdout,
+                stderr=stderr,
+                timed_out=timed_out,
+                truncated=out_truncated or err_truncated,
+                started_at=started,
+                completed_at=completed,
+            )
+        finally:
+            # Explicit transport closure prevents CPython 3.12 from finalizing pipe transports
+            # after pytest/asyncio has already closed the event loop.
+            for reader_task in (stdout_task, stderr_task):
+                if not reader_task.done():
+                    reader_task.cancel()
+            await asyncio.gather(stdout_task, stderr_task, return_exceptions=True)
+            await _close_process_transport(process)

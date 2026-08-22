@@ -11,7 +11,6 @@ from make_mcp.inputs import make_variables, string_input_file, validate_variable
 from make_mcp.models import (
     EnvironmentConfig,
     MakeMcpConfig,
-    TaskDefinition,
     TaskResult,
     TaskStatus,
 )
@@ -104,27 +103,29 @@ class TaskExecutor:
             # inside the normalized preparation boundary so a deletion/permission race becomes
             # a stable ERROR result instead of leaking a raw filesystem exception.
             makefile = (project_context.directory / "Makefile").resolve(strict=True)
-            with self.lock.acquire(context, directory=project_context.directory):
-                # The JSON payload is intentionally scoped inside the execution lock and process
-                # lifetime. It cannot outlive the task or become shared mutable state.
-                with string_input_file(
+            with (
+                self.lock.acquire(context, directory=project_context.directory),
+                string_input_file(
                     task,
                     validated,
                     input_limit_bytes=self.config.defaults.input_limit_bytes,
-                ) as payload_file:
-                    process = await self.runner.run(
-                        argv=build_make_argv(
-                            task.name,
-                            makefile=makefile,
-                            variables=make_variables(task, validated),
-                            string_input_file=payload_file,
-                            preview=preview,
-                        ),
-                        cwd=project_context.directory,
-                        timeout_seconds=task.timeout_seconds,
-                        env=build_environment(self.config.environment),
-                        output_limit_bytes=self.config.defaults.output_limit_bytes,
-                    )
+                ) as payload_file,
+            ):
+                # The JSON payload is intentionally scoped inside the execution lock and process
+                # lifetime. It cannot outlive the task or become shared mutable state.
+                process = await self.runner.run(
+                    argv=build_make_argv(
+                        task.name,
+                        makefile=makefile,
+                        variables=make_variables(task, validated),
+                        string_input_file=payload_file,
+                        preview=preview,
+                    ),
+                    cwd=project_context.directory,
+                    timeout_seconds=task.timeout_seconds,
+                    env=build_environment(self.config.environment),
+                    output_limit_bytes=self.config.defaults.output_limit_bytes,
+                )
         except ExecutionStartError as exc:
             message = str(exc)
         except OSError as exc:

@@ -226,7 +226,6 @@ def test_target_looking_recipe_continuation_is_not_discovered(app_for):
     assert [task.name for task in app.list_tasks()] == ["safe"]
 
 
-
 def test_literal_include_allows_trailing_comment(repo):
     root = repo("include rules.mk # trusted literal include\n")
     (root / "rules.mk").write_text("included:\n\t@true\n", encoding="utf-8")
