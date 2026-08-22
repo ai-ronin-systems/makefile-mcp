@@ -3,9 +3,9 @@
 import fcntl
 import hashlib
 import re
+from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Iterator
 
 from make_mcp.errors import ConfigurationError, TaskBusyError, UnsafePathError
 

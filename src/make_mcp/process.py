@@ -3,6 +3,7 @@
 import asyncio
 import os
 import signal
+from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -54,17 +55,13 @@ async def _terminate_process_tree(
         return
 
     if process.returncode is None:
-        try:
+        with suppress(TimeoutError):
             await asyncio.wait_for(process.wait(), timeout=grace_seconds)
-        except TimeoutError:
-            pass
 
     # Once the leader has exited (or the TERM grace expired), escalate any remaining members.
     # Waiting only for the leader is not proof that the whole process group stopped.
-    try:
+    with suppress(ProcessLookupError):
         os.killpg(process.pid, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
     if process.returncode is None:
         await process.wait()
 
@@ -79,10 +76,8 @@ async def _terminate_residual_process_group(
     except ProcessLookupError:
         return
     await asyncio.sleep(grace_seconds)
-    try:
+    with suppress(ProcessLookupError):
         os.killpg(process_group_id, signal.SIGKILL)
-    except ProcessLookupError:
-        pass
 
 
 async def _finish_reader(

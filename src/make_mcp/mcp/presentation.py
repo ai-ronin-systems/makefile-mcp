@@ -112,17 +112,14 @@ def _slug(value: str) -> str:
 
 def _short_hash(context: str, target: str) -> str:
     """Return a stable short identity suffix for rare direct-tool name collisions."""
-    payload = f"{context}\0{target}".encode("utf-8")
+    payload = f"{context}\0{target}".encode()
     return hashlib.sha256(payload).hexdigest()[:8]
 
 
 def direct_tool_base_name(task: TaskDefinition) -> str:
     """Create an agent-readable direct tool name before collision resolution."""
     target = _slug(task.name)
-    if task.context == "root":
-        name = f"make_{target}"
-    else:
-        name = f"make_{_slug(task.context)}_{target}"
+    name = f"make_{target}" if task.context == "root" else f"make_{_slug(task.context)}_{target}"
 
     # MCP tool names are capped at 128 characters. Preserve the readable prefix and append
     # stable identity only when truncation is necessary.

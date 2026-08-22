@@ -43,10 +43,9 @@ async def test_shell_metacharacter_injection_is_rejected_before_make_runs(app_fo
 
 def test_context_lock_is_non_blocking(tmp_path: Path):
     lock = FileContextLock(tmp_path)
-    with lock.acquire("root"):
-        with pytest.raises(TaskBusyError):
-            with lock.acquire("root"):
-                pass
+    with lock.acquire("root"), pytest.raises(TaskBusyError):
+        with lock.acquire("root"):
+            pass
 
 
 @pytest.mark.asyncio
@@ -148,7 +147,6 @@ def test_physical_context_directory_is_the_lock_identity(tmp_path: Path):
     lock = FileContextLock(tmp_path)
     directory = tmp_path / "same"
     directory.mkdir()
-    with lock.acquire("first", directory=directory):
-        with pytest.raises(TaskBusyError):
-            with lock.acquire("alias", directory=directory):
-                pass
+    with lock.acquire("first", directory=directory), pytest.raises(TaskBusyError):
+        with lock.acquire("alias", directory=directory):
+            pass

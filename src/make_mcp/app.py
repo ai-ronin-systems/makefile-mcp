@@ -8,7 +8,7 @@ from make_mcp.config import load_config_state
 from make_mcp.doctor import run_doctor
 from make_mcp.errors import ConfigurationError
 from make_mcp.execution import TaskExecutor
-from make_mcp.filesystem import Fingerprint, FileContextLock, detect_repository_root, fingerprint
+from make_mcp.filesystem import FileContextLock, Fingerprint, detect_repository_root, fingerprint
 from make_mcp.makefile import StaticMakeInspector
 from make_mcp.models import DoctorResult, MakeMcpConfig, TaskDefinition, TaskResult
 from make_mcp.process import SubprocessRunner
