@@ -2,16 +2,30 @@
 
 ## Supported version
 
-Security fixes target the latest `0.1.x` release while the project is pre-1.0.
+Security fixes target the latest published release while Just Make It MCP (JMIM) is pre-1.0.
 
-## Boundary
+## Security model
 
-Make MCP assumes the repository and its Makefiles are code trusted by the operator. It protects the CLI/MCP request boundary from becoming an arbitrary command, environment-injection or path-traversal surface; it does not sandbox a trusted Make recipe.
+JMIM assumes repository Makefiles are trusted operator-controlled code. It constrains the MCP/CLI request boundary; it does not sandbox a trusted Make recipe.
 
-Do not expose a dangerous target unless that exposure is intentional. `risk` metadata is advisory and never replaces server-side exposure checks.
+The complete threat model, including auto/governed exposure, GNU Make input handling, arbitrary-string JSON transport, conservative discovery, path/environment controls, execution bounds, and deployment assumptions, is documented in [docs/security.md](docs/security.md).
 
-See `docs/security.md` for the detailed threat boundary and guardrails.
+Governed exposure is documented separately in [docs/governed_mode.md](docs/governed_mode.md).
 
 ## Reporting
 
-Report vulnerabilities privately to the project maintainers with the affected version, reproduction conditions, impact and proposed mitigation when available. Avoid publishing a working exploit before maintainers have had a reasonable opportunity to address it.
+Use **GitHub Private Vulnerability Reporting** for security reports:
+
+<https://github.com/ai-ronin-systems/make-mcp/security/advisories/new>
+
+Repository owners must enable Private Vulnerability Reporting before the first public release. Do not open a public issue for an undisclosed vulnerability.
+
+Include:
+
+- affected version;
+- reproduction conditions;
+- expected and actual behavior;
+- security impact;
+- proposed mitigation when available.
+
+Avoid publishing a working exploit before maintainers have had a reasonable opportunity to investigate and ship a fix.

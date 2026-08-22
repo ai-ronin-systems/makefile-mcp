@@ -1,21 +1,43 @@
 [build-system]
-requires = ["hatchling>=1.27"]
+requires = ["hatchling==1.31.0"]
 build-backend = "hatchling.build"
 
 [project]
 name = "make-mcp"
-version = "0.1.0"
-description = "Expose explicitly allowed Make targets as safe CLI and MCP operations."
+dynamic = ["version"]
+description = "Expose trusted GNU Make targets to MCP with zero-config discovery and optional governed execution."
 readme = "README.md"
 requires-python = ">=3.11"
-license = {text = "MIT"}
-authors = [{name = "Make MCP contributors"}]
+license = {text = "Apache-2.0"}
+authors = [{name = "Just Make It MCP contributors"}]
+keywords = ["mcp", "model-context-protocol", "makefile", "gnu-make", "ai-agents", "automation"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Software Development :: Build Tools",
+]
 dependencies = [
   "mcp==2.0.0",
   "pydantic>=2.10,<3",
   "PyYAML>=6.0,<7",
   "typer>=0.16,<1",
 ]
+
+[project.urls]
+Homepage = "https://github.com/ai-ronin-systems/make-mcp"
+Repository = "https://github.com/ai-ronin-systems/make-mcp"
+Issues = "https://github.com/ai-ronin-systems/make-mcp/issues"
+Changelog = "https://github.com/ai-ronin-systems/make-mcp/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/ai-ronin-systems/make-mcp/tree/main/docs"
 
 [project.optional-dependencies]
 dev = [
@@ -26,6 +48,10 @@ dev = [
 
 [project.scripts]
 make-mcp = "make_mcp.cli:main"
+
+
+[tool.hatch.version]
+path = "src/make_mcp/version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/make_mcp"]

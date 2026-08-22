@@ -4,3 +4,10 @@ contexts:
     directory: backend
   frontend:
     directory: frontend
+tasks:
+  status:
+    contexts: [root]
+    risk: safe
+  test:
+    contexts: [backend, frontend]
+    risk: safe

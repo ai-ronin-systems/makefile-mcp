@@ -3,7 +3,8 @@ tasks:
   test:
     variables:
       MODULE:
-        type: string
+        type: token
+  lint: {}
 capabilities:
   verify: test
   lint: lint

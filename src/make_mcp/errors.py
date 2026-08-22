@@ -2,44 +2,40 @@
 
 
 class MakeMcpError(Exception):
-    pass
+    """Base class for expected, user-facing Make MCP failures."""
 
 
 class ConfigurationError(MakeMcpError):
-    pass
+    """Invalid repository detection or ``.make-mcp.yaml`` configuration."""
 
 
 class ContextNotFound(MakeMcpError):
-    pass
+    """Requested execution context does not exist or resolve safely."""
 
 
 class UnsafePathError(MakeMcpError):
-    pass
+    """A supplied path is missing when required or escapes the repository boundary."""
 
 
 class TaskNotFound(MakeMcpError):
-    pass
+    """Requested target or semantic capability is unknown."""
 
 
 class TaskNotExposed(MakeMcpError):
-    pass
+    """A discovered target is hidden by governed exposure policy."""
 
 
 class VariableValidationError(MakeMcpError):
-    pass
+    """Caller input violates a declared task-variable contract."""
 
 
 class TaskBusyError(MakeMcpError):
-    pass
-
-
-class MakeUnavailableError(MakeMcpError):
-    pass
+    """Another process already owns the execution lock for a context."""
 
 
 class MakeInspectionError(MakeMcpError):
-    pass
+    """Static Make discovery cannot safely model the encountered syntax."""
 
 
 class ExecutionStartError(MakeMcpError):
-    pass
+    """The bounded Make subprocess could not be started."""

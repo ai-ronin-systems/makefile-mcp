@@ -174,18 +174,19 @@ Python 3.11+ · GNU Make · Linux or macOS
 
 ## Documentation
 
-1. [**Architecture**](docs/architecture.md) — runtime flow, responsibilities, lifecycle, dependency rules, and design constraints.
-2. [**Configuration**](docs/configuration.md) — authoritative `.make-mcp.yaml` reference.
-3. [**Governed mode**](docs/governed_mode.md) — explicit exposure, typed inputs, risk metadata, and operating model.
-4. [**MCP presentations**](docs/mcp_presentations.md) — `direct`, `generic`, `both`, schemas, naming, lifecycle, and selection guidance.
-5. [**Contexts and capabilities**](docs/contexts_and_capabilities.md) — monorepo scoping, `(context, target)` authorization, and stable semantic mappings.
-6. [**MCP client setup**](docs/clients.md) — Codex, Claude Code, LangChain/LangGraph, Cursor, VS Code, and `uvx` examples.
-7. [**Security**](docs/security.md) — trust boundary, Make input safety, arbitrary strings, discovery, environment/path controls, and execution bounds.
-8. [**Development**](docs/development.md) — contributor setup and hands-on Make targets.
-9. [**Deployment**](docs/deployment.md) — Docker/stdio deployment, immutable images, and provisioning custom tools plus Makefiles.
-10. [**AuditHound compatibility**](docs/audithound-compatibility.md) — orchestration/evidence-provider integration guidance.
-11. [**Releasing**](docs/releasing.md) — version/tag contract, clean-package smoke test, PyPI Trusted Publishing, provenance, and GitHub Releases.
+1. [**Architecture**](docs/architecture.md) — runtime flow, responsibilities, lifecycle, invariants, and dependency rules.
+2. [**CLI reference**](docs/cli.md) — commands, options, result model, root detection, and exit codes.
+3. [**Configuration**](docs/configuration.md) — authoritative `.make-mcp.yaml` fields, defaults, and precedence.
+4. [**Static Make discovery**](docs/discovery.md) — supported syntax, fail-closed behavior, includes, limitations, and cache semantics.
+5. [**Governed mode**](docs/governed_mode.md) — explicit exposure, typed inputs, risk metadata, and operating model.
+6. [**MCP presentations**](docs/mcp_presentations.md) — `direct`, `generic`, `both`, schemas, result/error semantics, naming, and lifecycle.
+7. [**Contexts and capabilities**](docs/contexts_and_capabilities.md) — monorepo scoping, `(context, target)` authorization, and semantic mappings.
+8. [**MCP client setup**](docs/clients.md) — Codex, Claude Code, LangChain/LangGraph, Cursor, VS Code, and `uvx` examples.
+9. [**Security**](docs/security.md) — trust boundary, Make input safety, arbitrary strings, discovery, environment/path controls, and execution bounds.
+10. [**Development**](docs/development.md) — contributor workflows, code ownership, regression expectations, and Definition of Done.
+11. [**Deployment**](docs/deployment.md) — Docker/stdio deployment, production checklist, and provisioning custom tools plus Makefiles.
+12. [**AuditHound integration pattern**](docs/integrations/audithound.md) — orchestration/evidence-provider integration guidance.
+13. [**Releasing**](docs/releasing.md) — version/tag contract, clean-package smoke test, PyPI Trusted Publishing, provenance, and GitHub Releases.
 
 Security reporting: [SECURITY.md](SECURITY.md).
 Contributing: [CONTRIBUTING.md](CONTRIBUTING.md).
-# make-mcp

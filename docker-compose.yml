@@ -1,5 +1,6 @@
 services:
   make-mcp:
+    init: true
     build: .
     image: make-mcp:local
     user: "${UID:-1000}:${GID:-1000}"

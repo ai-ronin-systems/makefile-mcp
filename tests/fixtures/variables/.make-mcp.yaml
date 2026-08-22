@@ -3,4 +3,4 @@ tasks:
   show:
     variables:
       MODULE:
-        type: string
+        type: token

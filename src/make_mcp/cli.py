@@ -1,4 +1,4 @@
-"""Typer CLI. All task policy and execution remain in the application/core modules."""
+"""Typer CLI. All task policy and execution remain in the application modules."""
 
 import asyncio
 import json
@@ -10,15 +10,19 @@ from pydantic import BaseModel
 
 from make_mcp.app import Application, build_application
 from make_mcp.errors import MakeMcpError
+from make_mcp.mcp import McpPresentation
+from make_mcp.version import __version__
 
 cli = typer.Typer(
     no_args_is_help=True,
     add_completion=False,
-    help="Safely expose selected Make targets over CLI and MCP.",
+    help="Expose Make targets over CLI and MCP with optional governance.",
 )
 
 
 class State:
+    """Mutable CLI process state shared by Typer command callbacks."""
+
     root: Path | None = None
     application: Application | None = None
 
@@ -49,13 +53,29 @@ def _fail(exc: MakeMcpError) -> None:
     raise typer.Exit(code=2)
 
 
+def _version_callback(value: bool) -> None:
+    if value:
+        typer.echo(__version__)
+        raise typer.Exit()
+
+
 @cli.callback()
 def callback(
     root: Annotated[
         Path | None,
         typer.Option("--root", help="Repository path; defaults to auto-detection."),
     ] = None,
+    version: Annotated[
+        bool,
+        typer.Option(
+            "--version",
+            callback=_version_callback,
+            is_eager=True,
+            help="Show the JMIM version and exit.",
+        ),
+    ] = False,
 ) -> None:
+    """Set the repository root used by subsequent CLI commands."""
     state.root = root
     state.application = None
 
@@ -65,6 +85,7 @@ def list_command(
     context: Annotated[str, typer.Option("--context", "-c")] = "root",
     json_output: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
+    """List callable tasks in one context."""
     try:
         tasks = _app().list_tasks(context)
     except MakeMcpError as exc:
@@ -83,6 +104,7 @@ def describe_command(
     context: Annotated[str, typer.Option("--context", "-c")] = "root",
     json_output: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
+    """Describe one callable task and its governed input contract."""
     try:
         definition = _app().describe_task(task, context)
     except MakeMcpError as exc:
@@ -93,7 +115,6 @@ def describe_command(
     typer.echo(f"Task: {definition.name}")
     typer.echo(f"Context: {definition.context}")
     typer.echo(f"Risk: {definition.risk}")
-    typer.echo(f"Exposure: {definition.exposure_source}")
     typer.echo(f"Timeout: {definition.timeout_seconds}s")
     if definition.description:
         typer.echo(f"Description: {definition.description}")
@@ -112,8 +133,16 @@ def run_command(
         typer.Argument(help="Declared KEY=VALUE task variables."),
     ] = None,
     context: Annotated[str, typer.Option("--context", "-c")] = "root",
+    preview: Annotated[
+        bool,
+        typer.Option(
+            "--preview",
+            help="Ask GNU Make for a --dry-run preview; this is not a side-effect-free sandbox.",
+        ),
+    ] = False,
     json_output: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
+    """Execute or preview one callable task with optional declared ``KEY=VALUE`` inputs."""
     variables: dict[str, str] = {}
     for item in assignments or []:
         if "=" not in item:
@@ -125,13 +154,14 @@ def run_command(
             raise typer.Exit(code=2)
         variables[key] = value
     try:
-        result = asyncio.run(_app().run_task(task, variables, context))
+        result = asyncio.run(_app().run_task(task, variables, context, preview=preview))
     except MakeMcpError as exc:
         _fail(exc)
     if json_output:
         _json(result)
     else:
-        typer.echo(f"{result.task}: {result.status} ({result.duration_ms} ms)")
+        mode = "preview" if result.preview else "run"
+        typer.echo(f"{result.task}: {result.status} [{mode}] ({result.duration_ms} ms)")
         if result.stdout:
             typer.echo(result.stdout, nl=not result.stdout.endswith("\n"))
         if result.stderr:
@@ -144,6 +174,7 @@ def run_command(
 
 @cli.command("doctor")
 def doctor_command(json_output: Annotated[bool, typer.Option("--json")] = False) -> None:
+    """Run read-only repository diagnostics."""
     try:
         result = _app().doctor()
     except MakeMcpError as exc:
@@ -161,13 +192,26 @@ def doctor_command(json_output: Annotated[bool, typer.Option("--json")] = False)
 
 
 @cli.command("serve")
-def serve_command() -> None:
-    from make_mcp.mcp_server import run_stdio_server
+def serve_command(
+    tools: Annotated[
+        McpPresentation,
+        typer.Option(
+            "--tools",
+            help="MCP presentation: direct per-target tools, generic list/describe/run, or both.",
+        ),
+    ] = McpPresentation.DIRECT,
+) -> None:
+    """Run the MCP stdio server using the selected presentation mode."""
+    from make_mcp.mcp.server import run_stdio_server
 
-    run_stdio_server(_app())
+    try:
+        run_stdio_server(_app(), presentation=tools)
+    except MakeMcpError as exc:
+        _fail(exc)
 
 
 def main() -> None:
+    """Run the Make MCP command-line interface."""
     cli()
 
 

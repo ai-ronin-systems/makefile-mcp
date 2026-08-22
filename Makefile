@@ -1,8 +1,8 @@
 # ------------------------------------------------------------
-# Make MCP Makefile
+# Just Make It MCP (JMIM) Makefile
 #
 # Host-side developer surface for installing, validating,
-# testing, packaging, and running Make MCP locally or in Docker.
+# testing, packaging, and running JMIM locally or in Docker.
 # Run from the repository root.
 # ------------------------------------------------------------
 
@@ -22,6 +22,7 @@ PYTEST_BASE := PYTEST_ADDOPTS= $(PYTEST) -c pyproject.toml
 TASK ?=
 ARGS ?=
 TEST ?=
+TAG ?=
 
 # Workspace archive --------------------------------------------
 WORKSPACE_NAME ?= $(notdir $(CURDIR))
@@ -46,15 +47,15 @@ CYAN    := \033[36m
 	test test-count test-unit test-integration test-security test-one test-last-failed test-verbose \
 	check smoke ci \
 	list list-json describe describe-json doctor doctor-json run run-json serve \
-	package package-list zip-workspace \
+	package package-list package-smoke release-check release-check-dist zip-workspace \
 	docker-build docker-doctor docker-list docker-check docker-serve docker-shell \
 	clean distclean
 
 ##@General
 
 help: ## Show categorized help
-	@printf "\n$(BOLD)Make MCP$(RESET)\n"
-	@printf "\nDeveloper commands for the Make MCP repository.\n"
+	@printf "\n$(BOLD)Just Make It MCP (JMIM)$(RESET)\n"
+	@printf "\nDeveloper commands for the JMIM repository.\n"
 	@printf "Typical flow: $(CYAN)make install$(RESET) -> $(MAGENTA)make check$(RESET)\n\n"
 	@awk \
 		-v reset="$(RESET)" \
@@ -70,7 +71,7 @@ help: ## Show categorized help
 			if (name == "Quality") return magenta; \
 			if (name == "Tests") return magenta; \
 			if (name == "Validation") return yellow; \
-			if (name == "Make MCP CLI") return blue; \
+			if (name == "JMIM CLI") return blue; \
 			if (name == "Packaging") return yellow; \
 			if (name == "Docker") return green; \
 			if (name == "Maintenance") return cyan; \
@@ -177,9 +178,9 @@ smoke: prerequisites ## Smoke-check CLI bootstrap, diagnostics, and task discove
 
 ci: check package ## Run checks and build distributions
 
-##@Make MCP CLI
+##@JMIM CLI
 
-list: ## List targets exposed by Make MCP
+list: ## List targets exposed by JMIM
 	$(UV) run make-mcp list
 
 list-json: ## List exposed targets as JSON
@@ -212,8 +213,31 @@ serve: ## Start the MCP stdio server locally
 
 ##@Packaging
 
-package: ## Build wheel and source distribution into dist/
+package: ## Build a clean wheel and source distribution into dist/
+	rm -rf dist
 	$(UV) build
+
+package-smoke: ## Install and exercise the built wheel in a clean Linux container
+	@test -n "$$(find dist -maxdepth 1 -type f -name '*.whl' -print -quit 2>/dev/null)" || { printf "$(RED)error: build dist/ first with make package$(RESET)\n"; exit 2; }
+	$(DOCKER) run --rm -v "$(CURDIR)/dist:/dist:ro" python:3.13-slim sh -euxc '\
+		apt-get update >/dev/null; \
+		apt-get install -y --no-install-recommends make >/dev/null; \
+		python -m pip install --disable-pip-version-check --no-cache-dir /dist/*.whl >/dev/null; \
+		make-mcp --version; \
+		tmp="$$(mktemp -d)"; \
+		printf "hello: ## Clean-container package smoke\n\t@echo smoke-ok\n" > "$$tmp/Makefile"; \
+		cd "$$tmp"; \
+		make-mcp doctor; \
+		make-mcp list | grep -q "hello"; \
+		make-mcp run hello | grep -q "smoke-ok"'
+
+release-check: ## Validate TAG against version and changelog: make release-check TAG=v0.1.0
+	@test -n "$(TAG)" || { printf "$(RED)error: TAG is required$(RESET)\n"; exit 2; }
+	python3 scripts/check_release.py --tag "$(TAG)"
+
+release-check-dist: ## Validate TAG plus the built wheel/sdist metadata
+	@test -n "$(TAG)" || { printf "$(RED)error: TAG is required$(RESET)\n"; exit 2; }
+	python3 scripts/check_release.py --tag "$(TAG)" --dist dist
 
 package-list: ## Show generated distribution artifacts
 	@find dist -maxdepth 1 -type f -printf '%f\n' 2>/dev/null | sort || true
@@ -254,16 +278,16 @@ zip-workspace: ## Create a shareable workspace ZIP honoring .gitignore and .zipi
 docker-build: ## Build the local runtime image
 	$(DOCKER) build -t $(IMAGE) .
 
-docker-doctor: ## Run Make MCP diagnostics through Compose
+docker-doctor: ## Run JMIM diagnostics through Compose
 	$(DOCKER_COMPOSE) run --rm make-mcp doctor
 
 docker-list: ## List exposed tasks through Compose
 	$(DOCKER_COMPOSE) run --rm make-mcp list
 
-docker-check: docker-build docker-doctor docker-list ## Build image and verify Make MCP in Docker
+docker-check: docker-build docker-doctor docker-list ## Build image and verify JMIM in Docker
 
 docker-serve: ## Start the MCP stdio server through Compose
-	$(DOCKER_COMPOSE) run --rm make-mcp serve
+	$(DOCKER_COMPOSE) run --rm -T make-mcp serve
 
 docker-shell: ## Open a shell in the local runtime image
 	$(DOCKER) run --rm -it --entrypoint /bin/sh -v "$(CURDIR):/workspace" -w /workspace $(IMAGE)
@@ -276,5 +300,5 @@ clean: ## Remove generated test, lint, and build artifacts
 	find . -type d -name '*.egg-info' -prune -exec rm -rf {} +
 	find . -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
 
-distclean: clean ## Also remove the local uv environment and Make MCP locks
+distclean: clean ## Also remove the local uv environment and JMIM locks
 	rm -rf .venv .make-mcp/locks

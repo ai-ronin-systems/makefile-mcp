@@ -12,6 +12,7 @@ def repo(tmp_path: Path):
         if config is not None:
             (tmp_path / ".make-mcp.yaml").write_text(config, encoding="utf-8")
         return tmp_path
+
     return create
 
 
@@ -19,4 +20,5 @@ def repo(tmp_path: Path):
 def app_for(repo):
     def create(makefile: str, config: str | None = None):
         return build_application(repo(makefile, config))
+
     return create
