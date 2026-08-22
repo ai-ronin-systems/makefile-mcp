@@ -1,128 +1,191 @@
-# Make MCP
+# Just Make It MCP
 
-Make MCP exposes **explicitly allowed Make targets** as structured CLI operations and MCP tools. Make remains authoritative for recipes, dependencies, ordering and project-specific workflow; Make MCP adds discovery, exposure metadata, typed inputs, repository confinement, bounded execution, locking and stable results.
+**Expose trusted GNU Make targets to AI agents — without exposing a generic shell or replacing Make with another workflow system.**
 
-> If Make can already express it, Make MCP does not model it again.
+Just Make It MCP (**JMIM**) turns an existing Makefile into typed MCP tools. It is **zero-config by default** for trusted local use and **deny-by-default when governed**.
 
-## Install
-
-```bash
-pipx install .
-# or
-uv tool install .
+```text
+Makefile  →  JMIM  →  Codex / Claude / LangChain / Cursor / VS Code / MCP client
 ```
-
-Requires Python 3.11+ and GNU Make.
 
 ## Quick start
 
-A normal Makefile is enough:
-
-```make
-.PHONY: test
-test: ## Run tests
-	pytest -q
+```bash
+pipx install make-mcp        # or: uv tool install make-mcp
+make-mcp serve
 ```
 
-Optional `.make-mcp.yaml` adds metadata only:
+Given:
+
+```make
+test: ## Run tests
+	pytest -q
+
+lint: ## Run lint
+	ruff check .
+```
+
+JMIM exposes `make_test` and `make_lint` as MCP tools.
+
+```bash
+make-mcp list
+make-mcp doctor
+make-mcp run test
+make-mcp run test --preview   # GNU Make --dry-run; not a sandbox
+```
+
+One-shot use: `uvx make-mcp serve`.
+
+## Features and advantages
+
+| Area                | Feature / advantage                                          |
+| ------------------- | ------------------------------------------------------------ |
+| **Security**        | **No arbitrary shell/command tool.** Agents invoke exposed Make targets, not arbitrary host commands. |
+| **Security**        | **GNU Make is treated as an interpreter boundary.** JMIM does not assume `shell=False` alone makes caller input safe. |
+| **Security**        | **Typed governed inputs.** `token`, `enum`, `integer`, `boolean`, `path`, and `string` give caller input an explicit contract. |
+| **Security**        | **Arbitrary strings stay out of Make assignment syntax.** They travel through a private JSON side channel instead of `NAME=<untrusted text>`. |
+| **Security**        | **Repository confinement.** Contexts and `path` inputs stay inside the repository after symlink resolution. |
+| **Security**        | **Make control variables are protected.** Names such as `SHELL`, `MAKEFLAGS`, `MAKEFILES`, `VPATH`, and `MAKE_MCP_INPUT` cannot be exposed as caller inputs. |
+| **Security**        | **Governed mode is deny-by-default.** Only explicitly authorized `(context, target)` pairs are callable; changed policy fails closed until restart. |
+| **Security**        | **Conservative static discovery.** Ambiguous Make syntax is omitted rather than guessed, reducing accidental tool exposure. |
+| **Security**        | **Exact Makefile execution.** JMIM executes the same conventional top-level `Makefile` it inspected, via `make -f`. |
+| **Runtime**         | **Bounded execution.** Input size, stdout, stderr, MCP error diagnostics, timeouts, and final pipe draining are bounded. |
+| **Runtime**         | **MCP stdin cannot leak into recipes.** Child stdin is `/dev/null`. |
+| **Runtime**         | **Process lifecycle is controlled.** Timeout/cancellation kills the task process group; same-group background descendants are cleaned up. |
+| **Runtime**         | **Cross-process locking.** One active task per resolved physical context directory prevents alias-based concurrent writes. |
+| **MCP**             | **Direct tools.** One typed MCP tool per authorized `(context, target)` pair gives agents strong discoverability and schemas. |
+| **MCP**             | **Generic tools.** `list_tasks`, `describe_task`, and `run_task` provide a stable vocabulary for orchestrators and large catalogs. |
+| **MCP**             | **One enforcement path.** Direct, generic, CLI, preview, contexts, and capabilities all use the same catalog, authorization, validator, and executor. |
+| **MCP**             | **Correct error semantics.** Authorization, validation, timeout, and Make failures surface as MCP tool errors. |
+| **MCP**             | **Progress/completion feedback.** Clients requesting progress receive truthful start/completion/failure events, not invented percentages. |
+| **Execution**       | **Preview mode.** `--preview` / `preview=true` uses GNU Make `--dry-run` through the same policy and resource controls. |
+| **Governance**      | **Zero-config auto mode.** Existing Makefiles work immediately for trusted local use; no YAML is required. |
+| **Governance**      | **Optional explicit governance.** `.make-mcp.yaml` adds target exposure, typed inputs, risk metadata, contexts, capabilities, environment policy, and limits without defining commands. |
+| **Monorepos**       | **Contexts.** Different repository directories get independent discovery, authorization, working directories, Makefiles, and locks. |
+| **Orchestration**   | **Capabilities.** Stable semantic names such as `verify` or `appsec_scan` map to already-authorized Make targets without a plugin or workflow layer. |
+| **Live use**        | **Catalog refresh.** Supported Makefile/include changes refresh discovery; authorization policy remains startup-stable and fail-closed. |
+| **Diagnostics**     | **`doctor`.** Detects Make/runtime problems, exposure/configuration inconsistencies, missing targets, context aliasing, and unsafe operating assumptions. |
+| **Integration**     | **Framework-neutral stdio MCP.** The same `make-mcp` server works with Codex, Claude, LangChain/LangGraph, Cursor, VS Code, and other MCP clients. |
+| **Design**          | **Make remains the source of truth.** No duplicate workflow DSL, plugin command language, scheduler, database, or second execution engine. |
+| **Design**          | **Small, auditable core.** Thin adapters sit around one application/catalog/executor path. |
+| **Distribution**    | **Simple installation.** Use `pipx`, `uv tool`, or `uvx`; JMIM does not need to be embedded into the target repository. |
+| **Release quality** | **Serious OSS release pipeline.** Multi-Python Linux/macOS CI, package smoke tests, PyPI Trusted Publishing, artifact validation, and provenance attestation. |
+
+## Architecture
+
+```text
+                         Makefile
+                            |
+                    conservative catalog
+                            |
+              +-------------+-------------+
+              |                           |
+            auto                       governed
+         no config                   .make-mcp.yaml
+              |                           |
+              +-------------+-------------+
+                            |
+                       Application
+                  +---------+---------+
+                  |                   |
+              MCP direct         MCP generic
+                  +---------+---------+
+                            |
+                         Executor
+                            |
+                      exact `make -f`
+```
+
+One catalog. One execution path. Thin CLI and MCP adapters.
+
+See [Architecture](docs/architecture.md).
+
+## Governed mode
+
+Without `.make-mcp.yaml`, JMIM runs in **auto mode**: every conservatively discovered root target is callable, with no caller-controlled Make variables.
+
+Add `.make-mcp.yaml` to switch to explicit governance:
 
 ```yaml
 schema_version: 1
 
-defaults:
-  timeout_seconds: 600
+contexts:
+  backend:
+    directory: backend
 
 tasks:
   test:
+    contexts: [root, backend]
+    risk: safe
+
+  deploy:
+    risk: dangerous
     variables:
-      MODULE:
-        type: string
+      ENV:
+        type: enum
+        values: [staging, production]
+        required: true
 
 capabilities:
   verify: test
 ```
 
-Then:
+Only enabled `(context, target)` pairs are callable. See [Governed mode](docs/governed_mode.md), [Configuration](docs/configuration.md), and [Contexts and capabilities](docs/contexts_and_capabilities.md).
+
+## MCP presentations
+
+Just Make It MCP (JMIM) supports three MCP presentations over the same callable catalog. Choose the flavor which meets best your requirements.
 
 ```bash
-make-mcp list
-make-mcp describe test
-make-mcp run test MODULE=security
-make-mcp doctor
-make-mcp serve
+make-mcp serve --tools direct    # default: one typed tool per callable target
+make-mcp serve --tools generic   # list_tasks / describe_task / run_task
+make-mcp serve --tools both      # both views, same execution core
 ```
 
-Only enabled configured tasks, documented `##` targets and explicit `.PHONY` targets are exposed. Merely discovering a target never authorizes execution.
+See [MCP presentations](docs/mcp_presentations.md) and [client setup](docs/clients.md).
 
-## MCP
+## Security
 
-`make-mcp serve` starts a stdio server exposing exactly:
+JMIM is a **constrained execution boundary around trusted repository automation**, not a sandbox for hostile Makefiles. Its model covers both OS subprocess behavior and GNU Make's own interpreter semantics, with explicit authorization, typed inputs, path confinement, resource bounds, process-group cleanup, and physical-context locking.
 
-- `list_tasks`
-- `describe_task`
-- `run_task`
+The built-in MCP server is **stdio-only**: no HTTP listener, remote-auth layer, TLS, tenancy, or network-service lifecycle is hidden inside the product.
 
-MCP is a thin interface; task policy and execution live in protocol-independent code.
+See **[SECURITY.md](SECURITY.md)** for the security policy, reporting process, trust boundary, and limitations. Detailed implementation notes are in [docs/security.md](docs/security.md).
 
-## Architecture
+## Intentional scope limits
 
-The implementation deliberately avoids structural ceremony:
+- GNU Make on **Linux/macOS**; Windows is not currently supported.
+- **Trusted repository** assumption: Makefiles, includes, scripts, and provisioned tools are operator-controlled code.
+- Static discovery is deliberately conservative, not a complete GNU Make parser.
+- Preview is GNU Make dry-run, **not sandboxing**; Make evaluation can still have side effects.
+- Direct tool inventory is registered at startup; generic catalog calls can observe supported Makefile changes.
+- `.make-mcp.yaml` is startup policy; changes require restart and fail closed until then.
+- Foreground/bounded tasks only; deliberately detached daemons are outside JMIM's process-group containment model.
+- No HTTP server, auth stack, scheduler, job queue, workflow persistence, plugin execution framework, or arbitrary shell tool.
+- Reload behavior: 
+  - `.make-mcp.yaml` is startup policy. Restart JMIM after adding, removing, or editing it.
+  - Makefile discovery refreshes when the conventional `Makefile` or tracked literal includes change.
+  - Generic calls see the refreshed catalog immediately.
+  - Direct tool inventory is a startup snapshot: adding or removing direct tools requires a restart. Existing direct tools still re-check the live catalog when invoked.
 
-```text
-CLI / MCP
-   ↓
-Application facade
-   ↓
-Catalog | Execution | Doctor
-   ↓
-Make | Filesystem | Subprocess
-```
+## Requirements
 
-See [Architecture](docs/architecture.md), [Configuration](docs/configuration.md), [Security](docs/security.md), [Development](docs/development.md), and [Design decisions](docs/design-decisions.md).
+Python 3.11+ · GNU Make · Linux or macOS
 
-## Docker
+## Documentation
 
-```bash
-docker build -t make-mcp:local .
+1. [**Architecture**](docs/architecture.md) — runtime flow, responsibilities, lifecycle, dependency rules, and design constraints.
+2. [**Configuration**](docs/configuration.md) — authoritative `.make-mcp.yaml` reference.
+3. [**Governed mode**](docs/governed_mode.md) — explicit exposure, typed inputs, risk metadata, and operating model.
+4. [**MCP presentations**](docs/mcp_presentations.md) — `direct`, `generic`, `both`, schemas, naming, lifecycle, and selection guidance.
+5. [**Contexts and capabilities**](docs/contexts_and_capabilities.md) — monorepo scoping, `(context, target)` authorization, and stable semantic mappings.
+6. [**MCP client setup**](docs/clients.md) — Codex, Claude Code, LangChain/LangGraph, Cursor, VS Code, and `uvx` examples.
+7. [**Security**](docs/security.md) — trust boundary, Make input safety, arbitrary strings, discovery, environment/path controls, and execution bounds.
+8. [**Development**](docs/development.md) — contributor setup and hands-on Make targets.
+9. [**Deployment**](docs/deployment.md) — Docker/stdio deployment, immutable images, and provisioning custom tools plus Makefiles.
+10. [**AuditHound compatibility**](docs/audithound-compatibility.md) — orchestration/evidence-provider integration guidance.
+11. [**Releasing**](docs/releasing.md) — version/tag contract, clean-package smoke test, PyPI Trusted Publishing, provenance, and GitHub Releases.
 
-docker run --rm -i \
-  --user "$(id -u):$(id -g)" \
-  -v "$PWD:/workspace" \
-  -w /workspace \
-  make-mcp:local serve
-```
-
-Or:
-
-```bash
-docker compose run --rm make-mcp doctor
-```
-
-## Security summary
-
-- no arbitrary shell tool or command field in YAML;
-- execution uses argv and never `shell=True`;
-- only declared variables are accepted;
-- path variables and contexts are confined after symlink resolution;
-- stdout/stderr are bounded while pipes are fully drained;
-- timeout/cancellation terminates the process group;
-- one active task per context uses a cross-process file lock;
-- child environment is explicitly inherited/allowed.
-
-See `SECURITY.md` and `docs/security.md`.
-
-## Development
-
-```bash
-uv sync --extra dev
-uv run ruff check .
-uv run pytest
-```
-
-## Non-goals
-
-No workflow engine, scheduler, LLM, database, cloud service, authentication layer, plugin framework, package-manager abstraction, CI abstraction, container abstraction, command DSL or framework-specific result parser.
-
-## License
-
-MIT.
+Security reporting: [SECURITY.md](SECURITY.md).
+Contributing: [CONTRIBUTING.md](CONTRIBUTING.md).
+# make-mcp
