@@ -85,7 +85,7 @@ def test_direct_tool_name_collisions_get_stable_suffixes(tmp_path):
         ".PHONY: foo/bar foo_bar\nfoo/bar:\n\t@true\nfoo_bar:\n\t@true\n",
         encoding="utf-8",
     )
-    tools = build_direct_tools(build_application(tmp_path))
+    tools = build_direct_tools(build_application(tmp_path, legacy_auto_run=True))
     names = [tool.name for tool in tools]
     assert len(names) == len(set(names)) == 2
     assert all(name.startswith("make_foo_bar") for name in names)
@@ -104,7 +104,7 @@ def test_direct_tool_name_resolution_survives_short_hash_collision(tmp_path):
         encoding="utf-8",
     )
 
-    tools = build_direct_tools(build_application(tmp_path))
+    tools = build_direct_tools(build_application(tmp_path, legacy_auto_run=True))
     names = [tool.name for tool in tools]
     assert len(names) == len(set(names)) == 3
     assert names[1].startswith("make_a_b_37c4ee04")

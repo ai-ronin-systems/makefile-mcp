@@ -95,8 +95,11 @@ class Application:
         )
 
 
-def build_application(start: Path | None = None) -> Application:
-    """Compose one application instance rooted at *start* or the current directory."""
+def build_application(start: Path | None = None, *, legacy_auto_run: bool = False) -> Application:
+    """Compose one application instance rooted at *start* or the current directory.
+
+    ``legacy_auto_run`` restores the pre-0.2 behavior where auto mode runs every target.
+    """
     root = detect_repository_root(start or Path.cwd())
     loaded = load_config_state(root)
     contexts = Contexts(root, loaded.config)
@@ -105,6 +108,7 @@ def build_application(start: Path | None = None) -> Application:
         contexts=contexts,
         inspector=StaticMakeInspector(root),
         governed=loaded.governed,
+        legacy_auto_run=legacy_auto_run,
     )
     executor = TaskExecutor(
         root=root,

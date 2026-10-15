@@ -4,8 +4,8 @@ import os
 from datetime import UTC, datetime
 from pathlib import Path
 
-from makefile_mcp.catalog import Catalog, Contexts
-from makefile_mcp.errors import ExecutionStartError
+from makefile_mcp.catalog import AUTO_RUN_TARGETS, Catalog, Contexts
+from makefile_mcp.errors import ExecutionStartError, TaskNotRunnable
 from makefile_mcp.filesystem import FileContextLock
 from makefile_mcp.inputs import make_variables, string_input_file, validate_variables
 from makefile_mcp.models import (
@@ -90,6 +90,11 @@ class TaskExecutor:
     ) -> TaskResult:
         """Execute one callable task and return a stable bounded result."""
         task = self.catalog.describe(task_name, context)
+        if not task.runnable:
+            raise TaskNotRunnable(
+                f"auto mode only runs {', '.join(sorted(AUTO_RUN_TARGETS))}; "
+                f"govern {task.name!r} in .makefile-mcp.yaml to run it"
+            )
         project_context = self.contexts.resolve(context)
         validated = validate_variables(
             task,

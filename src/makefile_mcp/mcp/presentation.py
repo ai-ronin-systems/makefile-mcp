@@ -269,6 +269,8 @@ def build_direct_tools(app: Application) -> list[DirectTool]:
     used: set[str] = set()
     for context in app.list_contexts():
         for task in app.list_tasks(context):
+            if not task.runnable:
+                continue
             name = _unique_tool_name(task, used)
             used.add(name)
             label = task.name if task.context == "root" else f"{task.context}:{task.name}"

@@ -66,34 +66,37 @@ def test_run_preview_uses_make_dry_run(tmp_path):
         ".PHONY: write\nwrite:\n\t@touch preview-marker\n", encoding="utf-8"
     )
 
-    result = _runner().invoke(cli, ["--root", str(tmp_path), "run", "write", "--preview"])
+    result = _runner().invoke(
+        cli, ["--root", str(tmp_path), "--legacy-auto-run", "run", "write", "--preview"]
+    )
 
     assert result.exit_code == 0
+    assert "--legacy-auto-run" in result.stderr
     assert "[preview]" in result.stdout
     assert "touch preview-marker" in result.stdout
     assert not (tmp_path / "preview-marker").exists()
 
 
 def test_run_json_returns_normalized_success_result(tmp_path):
-    (tmp_path / "Makefile").write_text("ok:\n\t@echo hello\n", encoding="utf-8")
+    (tmp_path / "Makefile").write_text("test:\n\t@echo hello\n", encoding="utf-8")
 
-    result = _runner().invoke(cli, ["--root", str(tmp_path), "run", "ok", "--json"])
+    result = _runner().invoke(cli, ["--root", str(tmp_path), "run", "test", "--json"])
 
     assert result.exit_code == 0
     payload = json.loads(result.stdout)
-    assert payload["task"] == "ok"
+    assert payload["task"] == "test"
     assert payload["status"] == "passed"
     assert payload["preview"] is False
     assert "hello" in payload["stdout"]
 
 
 def test_run_failed_task_exits_one_and_preserves_task_output(tmp_path):
-    (tmp_path / "Makefile").write_text("fail:\n\t@echo boom >&2; exit 7\n", encoding="utf-8")
+    (tmp_path / "Makefile").write_text("test:\n\t@echo boom >&2; exit 7\n", encoding="utf-8")
 
-    result = _runner().invoke(cli, ["--root", str(tmp_path), "run", "fail"])
+    result = _runner().invoke(cli, ["--root", str(tmp_path), "run", "test"])
 
     assert result.exit_code == 1
-    assert "fail: failed [run]" in result.stdout
+    assert "test: failed [run]" in result.stdout
     assert "boom" in result.stderr
 
 
