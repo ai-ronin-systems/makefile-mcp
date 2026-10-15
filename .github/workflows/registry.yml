@@ -41,6 +41,23 @@ jobs:
             exit 1
           fi
 
+      # The registry checks PyPI ownership once, with no retry. A just-uploaded version can take
+      # a while to appear in PyPI's JSON API, so wait until it serves the ownership marker.
+      - name: Wait for PyPI to serve this version
+        run: |
+          name="$(jq -r .name server.json)"
+          url="https://pypi.org/pypi/$(jq -r '.packages[0].identifier' server.json)/$(jq -r .version server.json)/json"
+          for attempt in $(seq 1 40); do
+            if curl -fsS "$url" | jq -e --arg marker "mcp-name: ${name}" '.info.description | contains($marker)' >/dev/null; then
+              echo "PyPI serves the release with its ownership marker."
+              exit 0
+            fi
+            echo "Waiting for ${url} (attempt ${attempt}/40)"
+            sleep 15
+          done
+          echo "::error::PyPI did not serve ${url} with the ownership marker within 10 minutes."
+          exit 1
+
       - name: Log in with GitHub OIDC
         run: ./mcp-publisher login github-oidc
 
