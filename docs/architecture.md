@@ -77,7 +77,8 @@ SRP is applied at module scale:
 
 - `catalog.py` owns callable discovery/exposure state;
 - `inputs.py` owns caller-input validation, normalization, and JSON string transport;
-- `execution.py` owns orchestration from authorized task to normalized result;
+- `execution.py` owns orchestration from authorized task to normalized result, including the approval decision;
+- `audit.py` owns the optional JSON-lines audit log and secret masking;
 - `mcp/presentation.py` owns direct MCP presentation derivation and contains no MCP SDK dependency;
 - `mcp/server.py` owns MCP SDK registration and stdio transport only;
 - `syntax.py` is the single authority for lexical rules shared by config, inputs, and direct schemas;
@@ -104,7 +105,7 @@ See [Governed mode](governed_mode.md).
 
 ### Direct
 
-At server creation, Makefile MCP snapshots the callable catalog and derives one tool per `(context, target)`. Governed variable contracts become tool schemas. Generated callables are thin delegates to `Application.run_task()`. The optional `preview` control follows the same path and only changes the final GNU Make argv by adding `--dry-run`. MCP progress remains adapter-only and does not enter the application/executor layers.
+At server creation, Makefile MCP snapshots the callable catalog and derives one tool per runnable `(context, target)`. Governed variable contracts become tool schemas. Generated callables are thin delegates to `Application.run_task()`. The optional `preview` control follows the same path and only changes the final GNU Make argv by adding `--dry-run`. MCP progress remains adapter-only and does not enter the application/executor layers.
 
 ### Generic
 
@@ -129,6 +130,8 @@ arbitrary string
   -> generated MAKEFILE_MCP_INPUT path
   -> make -f Makefile target
 ```
+
+Between validation and process start, the executor asks for human approval when the task's risk is in `defaults.require_approval`, and records the attempt in the optional audit log. MCP obtains approval through elicitation in `mcp/server.py`; the CLI prompts or accepts `--yes`.
 
 The executor pins the exact Makefile used for discovery. Process creation, output retention, timeouts, cancellation, and process-tree cleanup are centralized in `process.py`.
 

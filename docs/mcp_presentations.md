@@ -21,7 +21,7 @@ Changing presentation never creates another policy or execution path.
 makefile-mcp serve --tools direct
 ```
 
-Makefile MCP snapshots the callable catalog at server startup and registers one MCP tool per authorized `(context, target)` pair.
+Makefile MCP snapshots the callable catalog at server startup and registers one MCP tool per authorized, runnable `(context, target)` pair.
 
 ```text
 root:test       -> make_test
@@ -157,11 +157,20 @@ The MCP adapter raises for:
 - authorization failures;
 - invalid caller inputs;
 - busy contexts and other expected request errors;
+- refused human approval;
 - Make `failed`, `timeout`, or `error` results.
 
 The MCP SDK therefore marks the call as a tool error (`isError=true`). For non-passing Make execution, the model-visible diagnostic combines retained stdout/stderr, marks executor-side truncation, and is capped at 8 KiB of UTF-8 bytes with a second marker if the MCP diagnostic itself is shortened.
 
+Only these expected Makefile MCP errors carry their message to the model. Any other exception is an internal bug, and the SDK reports it only as `Error executing tool <name>` so internals do not leak.
+
 CLI/direct Python embedding callers retain the normalized `TaskResult` model for completed executions; MCP performs this failure mapping only at the adapter boundary.
+
+## Human approval
+
+Tasks whose risk is listed in `defaults.require_approval` (default `[dangerous]`) need a human to approve each run, preview included. Both presentations ask through MCP elicitation, using the SDK's resolver mechanism: on 2026-07-28 and later protocol versions this travels as an input-required round trip, and on older versions as a server request. The approval parameter is filled by the server and never appears in a tool's input schema. If the client did not declare elicitation support, or the human declines, the call fails as a tool error and nothing runs.
+
+In auto mode, targets other than `test`, `lint`, `check`, and `fmt` are listed by `list_tasks` with `runnable: false` and get no direct tool.
 
 ## Cancellation
 

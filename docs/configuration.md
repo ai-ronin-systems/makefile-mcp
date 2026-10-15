@@ -211,7 +211,7 @@ MODE:
 Uses the safe path grammar and must resolve within the repository after symlink resolution.
 
 `path` values are transported to GNU Make as normalized absolute `NAME=value` assignments.
-Consequently, the **resolved absolute path** must also fit the safe path grammar. In `0.1.0`, a
+Consequently, the **resolved absolute path** must also fit the safe path grammar. Currently, a
 repository whose own absolute pathname contains whitespace cannot use a governed `path` input;
 use a wrapper target with a safe repository path or a `string` input consumed from
 `MAKEFILE_MCP_INPUT` when arbitrary path-like text is required.

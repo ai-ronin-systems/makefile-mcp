@@ -8,7 +8,7 @@ Before the first public release, security fixes target `main`. After publication
 
 Makefile MCP assumes repository Makefiles are trusted operator-controlled code. It constrains the MCP/CLI request boundary; it does not sandbox a trusted Make recipe.
 
-The complete threat model, including auto/governed exposure, GNU Make input handling, arbitrary-string JSON transport, conservative discovery, path/environment controls, execution bounds, and deployment assumptions, is documented in [docs/security.md](docs/security.md).
+The complete threat model, including auto/governed exposure, human approval for risky tasks, the audit log, GNU Make input handling, arbitrary-string JSON transport, conservative discovery, path/environment controls, execution bounds, and deployment assumptions, is documented in [docs/security.md](docs/security.md).
 
 Governed exposure is documented separately in [docs/governed_mode.md](docs/governed_mode.md).
 

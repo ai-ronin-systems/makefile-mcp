@@ -41,7 +41,7 @@ Makefile MCP therefore does not attempt to quote arbitrary caller text safely th
 
 `token`, `enum`, `integer`, `boolean`, and `path` are validated and normalized before becoming `NAME=value` arguments to GNU Make.
 
-Textual direct values use a narrow character grammar; `path` values additionally resolve inside the repository after symlink resolution. Because the normalized absolute path itself crosses GNU Make as `NAME=value`, repositories whose absolute pathname contains whitespace cannot use governed `path` inputs in `0.1.0`. GNU Make and Makefile MCP control variable names are reserved.
+Textual direct values use a narrow character grammar; `path` values additionally resolve inside the repository after symlink resolution. Because the normalized absolute path itself crosses GNU Make as `NAME=value`, repositories whose absolute pathname contains whitespace cannot use governed `path` inputs. GNU Make and Makefile MCP control variable names are reserved.
 
 These types constrain the **transport boundary**, not arbitrary recipe semantics: `token` means Make-lexically safe, `enum` adds an operator allowlist, and `path` adds repository confinement. A trusted recipe can still misuse a syntactically safe value, so choose the narrowest type appropriate to the recipe.
 

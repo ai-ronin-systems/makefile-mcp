@@ -48,7 +48,8 @@ Use `make help` rather than this document for the full list of utility, Docker, 
 | optional policy loading | `config.py` |
 | diagnostics | `doctor.py` |
 | public domain errors | `errors.py` |
-| authorized task transaction | `execution.py` |
+| authorized task transaction and approval decision | `execution.py` |
+| JSON-lines audit log and secret masking | `audit.py` |
 | root/path/fingerprint/locking primitives | `filesystem.py` |
 | typed input validation and string JSON transport | `inputs.py` |
 | conservative static Make inspection | `makefile.py` |
@@ -110,7 +111,7 @@ A new input type is justified only when it has a distinct validation/transport c
 1. Keep `mcp/presentation.py` independent from the MCP SDK.
 2. Keep MCP-specific `Context`, progress, annotations, and transport registration in `mcp/server.py`.
 3. Do not bypass `Application` for direct or generic execution.
-4. Keep protocol errors at the adapter boundary; application/CLI code continues using domain errors and `TaskResult`.
+4. Keep protocol errors at the adapter boundary; application/CLI code continues using domain errors and `TaskResult`. Expected failures must be `MakefileMcpError` subclasses: `mcp/server.py` turns those into SDK `ToolError`s, and the SDK hides the message of any other exception.
 5. Add/adjust real SDK integration tests in `tests/integration/test_mcp.py`.
 6. Verify generated tool schemas do not expose SDK-injected context parameters.
 
@@ -149,7 +150,7 @@ For behavior-changing work:
 
 Documentation is intentionally Markdown-first: no generated docs framework is required while the project remains small.
 
-`tests/unit/test_docs.py` protects cheap, high-value contracts such as relative links, local anchors, canonical document presence, product naming, CLI command coverage, and schema/presentation references. Do not make tests brittle by asserting ordinary prose word-for-word.
+`tests/unit/test_docs.py` protects cheap, high-value contracts such as relative links, local anchors, PyPI-safe absolute README links, canonical document presence, product naming, CLI command coverage, and schema/presentation references. Do not make tests brittle by asserting ordinary prose word-for-word.
 
 Public classes/functions carry concise docstrings; tricky private logic is documented only where the reason or invariant is non-obvious. Generated API documentation can be added later if there is an actual published API-doc use case.
 

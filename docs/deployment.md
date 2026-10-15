@@ -244,6 +244,8 @@ Before exposing a repository to an agent or orchestrator:
 - [ ] `.makefile-mcp.yaml` is present for non-trivial or shared agent use;
 - [ ] `makefile-mcp doctor` exits cleanly;
 - [ ] callable task inventory and dangerous-risk declarations have been reviewed;
+- [ ] the MCP client supports elicitation and shows approval prompts to a human, or `dangerous` tasks are acceptable to refuse;
+- [ ] `audit` is configured if run history must be kept, and secret inputs are marked `secret: true`;
 - [ ] only required environment names are inherited or injected;
 - [ ] the runtime user has only the filesystem permissions recipes require;
 - [ ] `.makefile-mcp/locks` is writable by the runtime user;

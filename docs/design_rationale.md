@@ -23,6 +23,8 @@ The repository, Makefiles, included Make code, wrapper scripts, and provisioned 
 - No arbitrary shell/command MCP tool: callers invoke discovered or explicitly governed Make targets.
 - Auto mode is zero-configuration for trusted local repositories: it lists every discovered target, runs only `test`, `lint`, `check`, and `fmt`, and disables caller-controlled Make variables.
 - Governed mode is deny-by-default over `(context, target)` pairs and accepts only declared inputs.
+- Tasks at configured risk levels (default `dangerous`) run only after human approval; clients that cannot ask a human are refused.
+- An optional audit log records each run attempt and its approval outcome, masking `secret: true` inputs.
 - GNU Make and Makefile MCP control names such as `SHELL`, `MAKEFLAGS`, `MAKEFILES`, `MAKEOVERRIDES`, `VPATH`, and `MAKEFILE_MCP_INPUT` cannot be caller task inputs.
 - `token`, `enum`, `integer`, `boolean`, and `path` inputs are validated and normalized before Make assignment transport.
 - Arbitrary `string` inputs use a private per-invocation JSON data channel rather than `NAME=<arbitrary text>` Make syntax.
@@ -49,7 +51,8 @@ These are primarily execution-reliability properties, not claims that Makefile M
 - Both modes share the same catalog, authorization, validator, executor, and result semantics.
 - Direct-tool names are normalized, bounded, and collision-safe.
 - Direct-tool schemas expose governed input types to clients, while executor-side validation remains authoritative.
-- Authorization, validation, timeout, and Make failures surface as MCP tool errors.
+- Authorization, validation, approval, timeout, and Make failures surface as MCP tool errors with their diagnostics; unexpected crashes do not leak details.
+- Approval uses MCP elicitation and never appears in tool input schemas.
 - Progress reporting emits truthful started/completed/failed events rather than synthetic percentages.
 
 ### Repository evolution
@@ -63,11 +66,11 @@ These are primarily execution-reliability properties, not claims that Makefile M
 
 ### Distribution and operation
 
-- Linux and macOS are supported; Windows is intentionally out of scope for `0.1.0`.
+- Linux and macOS are supported; Windows is intentionally out of scope.
 - `doctor` checks runtime, discovery, configuration, context aliasing, and operating assumptions.
 - The Python package supports `pipx`, `uv tool`, and one-shot `uvx` use.
 - CI covers Python 3.11–3.14 on Linux/macOS, branch coverage, formatting/linting, package installation smoke tests, Docker build, MCP stdio smoke, static typing, and runtime dependency vulnerability auditing.
-- Releases use a version/tag/changelog identity check, clean wheel/sdist validation, PyPI Trusted Publishing, provenance attestation, and GitHub Releases.
+- Releases run only after the full CI workflow passes on the tagged commit, then use a version/tag/changelog identity check, clean wheel/sdist validation, provenance attestation, PyPI Trusted Publishing, MCP Registry publication over GitHub OIDC, and GitHub Releases.
 
 ## Scope discipline
 
