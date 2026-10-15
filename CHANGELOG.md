@@ -4,6 +4,26 @@ All notable changes to Makefile MCP are documented here.
 
 ## Unreleased
 
+## 0.2.0 — 2026-10-15
+
+### Breaking
+
+- Auto mode (no `.makefile-mcp.yaml`) now runs only `test`, `lint`, `check`, and `fmt`. Other
+  discovered targets are still listed (with `runnable: false`) but refused at run time and not
+  registered as direct MCP tools. Pass `--legacy-auto-run` to restore the old behavior; it prints
+  a warning and will be removed in a future release.
+- `approval` is a reserved task variable name.
+
+### Added
+
+- Human approval for risky tasks: tasks whose risk is in `defaults.require_approval` (default
+  `[dangerous]`) run only after the human confirms through MCP elicitation. Clients that cannot
+  elicit are refused. The CLI prompts on a TTY, accepts `--yes`, and refuses otherwise.
+- Optional `audit` log: one JSON line per governed call (timestamp, task, context, arguments,
+  risk, approval outcome, status, exit code, duration, output size and tail), with size-based
+  rotation.
+- `secret: true` variable attribute: masked in audit arguments and output tails.
+
 ## 0.1.0 — 2026-08-23
 
 Initial public release.
