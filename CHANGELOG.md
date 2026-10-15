@@ -4,6 +4,17 @@ All notable changes to Makefile MCP are documented here.
 
 ## Unreleased
 
+## 0.2.1 — 2026-10-15
+
+Documentation-only release; no code behavior changes.
+
+### Fixed
+
+- README links on PyPI no longer 404: they now point to the GitHub repository.
+- README threat model no longer overclaims audit coverage; requests rejected before
+  validation are not logged.
+- `doctor` auto-mode warning and governed-mode/design docs describe the run-safe auto mode.
+
 ## 0.2.0 — 2026-10-15
 
 ### Breaking
