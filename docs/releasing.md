@@ -132,20 +132,25 @@ annotated Git tag v0.1.0
           v
 release workflow
   |
-  +-- tag commit is reachable from main
-  +-- make check
-  +-- Pyright static type gate
-  +-- locked runtime dependency vulnerability audit
-  +-- tag == version == changelog == server.json
-  +-- build wheel + sdist once
-  +-- inspect embedded package metadata
-  +-- clean-container wheel + stdio MCP smoke test
-  +-- GitHub build provenance attestation
+  +-- ci: the full CI workflow (Linux/macOS x Python matrix, Pyright,
+  |       dependency audit, package smoke) runs on the tagged commit
+  |
+  +-- build (read-only, no dependency cache)
+  |     +-- tag commit is reachable from main
+  |     +-- tag == version == changelog == server.json
+  |     +-- build wheel + sdist once
+  |     +-- inspect embedded package metadata
+  |     `-- clean-container wheel + stdio MCP smoke test
+  |
+  +-- attest (OIDC; runs no project code)
+  |     `-- GitHub build provenance attestation
   |
   +-- same artifacts -> PyPI via OIDC
   |
   `-- same artifacts -> GitHub Release
 ```
+
+Nothing publishes unless the full CI gate passes on the exact tagged commit. Only the `attest` and PyPI jobs can mint OIDC tokens, and neither runs project code or restores a cache, so a compromised test dependency or poisoned cache cannot sign or publish artifacts. For a second human check, add a required reviewer to the `pypi` environment in the GitHub repository settings.
 
 PyPI Trusted Publishing uses GitHub's short-lived OIDC identity. The workflow intentionally contains no fallback username/password or long-lived API-token path.
 
@@ -157,10 +162,10 @@ PyPI Trusted Publishing uses GitHub's short-lived OIDC identity. The workflow in
 makefile-mcp --version
 makefile-mcp doctor
 makefile-mcp list
-makefile-mcp run hello
+makefile-mcp run test
 MCP stdio handshake
 MCP list_tools
-MCP run_task(hello)
+MCP run_task(test)
 ```
 
 This catches missing package files, broken console-script metadata, undeclared runtime dependencies, source-tree-only imports, wheel/sdist packaging defects, and entry-point defects that only appear when an MCP client launches the installed server over real stdio.
