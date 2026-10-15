@@ -105,6 +105,14 @@ jobs:
         with:
           packages-dir: dist/
 
+  publish-registry:
+    name: MCP Registry
+    needs: publish-pypi
+    uses: ./.github/workflows/registry.yml
+    permissions:
+      contents: read
+      id-token: write
+
   github-release:
     name: Create GitHub release
     needs: [attest, publish-pypi]

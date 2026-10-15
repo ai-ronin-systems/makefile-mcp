@@ -205,10 +205,24 @@ def test_release_publishes_only_after_the_full_ci_gate():
 def test_release_isolates_oidc_from_project_code_and_caches():
     jobs = _release_jobs()
     minting = {name for name, job in jobs.items() if "id-token" in job.get("permissions", {})}
-    assert minting == {"attest", "publish-pypi"}
-    for name in minting:
+    assert minting == {"attest", "publish-pypi", "publish-registry"}
+    for name in minting - {"publish-registry"}:
         steps = jobs[name]["steps"]
         assert all(step.get("uses", "").startswith(("actions/", "pypa/")) for step in steps)
         assert not any("run" in step for step in steps)
     for step in jobs["build"]["steps"]:
         assert step.get("with", {}).get("enable-cache", False) is False
+
+
+def test_registry_publishes_after_pypi_with_a_verified_binary_and_no_project_code():
+    jobs = _release_jobs()
+    assert jobs["publish-registry"]["needs"] == "publish-pypi"
+    assert jobs["publish-registry"]["uses"] == "./.github/workflows/registry.yml"
+
+    job = _workflow("registry.yml")["jobs"]["publish"]
+    assert job["if"] == "startsWith(github.ref, 'refs/tags/v')"
+    scripts = "\n".join(step.get("run", "") for step in job["steps"])
+    assert "sha256sum --check --strict" in scripts
+    assert "login github-oidc" in scripts
+    for project_tool in ("make ", "uv ", "python", "pip "):
+        assert project_tool not in scripts

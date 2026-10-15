@@ -1,0 +1,48 @@
+name: MCP Registry
+
+# Called by release.yml after PyPI publication. Can also be run by hand on a release tag
+# (Actions -> MCP Registry -> Run workflow -> pick the tag) to list an already-published version.
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish to MCP Registry
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    # Short-lived GitHub OIDC login; no registry token is stored. Runs no project code.
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      MCP_PUBLISHER_VERSION: "1.8.1"
+      MCP_PUBLISHER_SHA256: a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned, checksum-verified mcp-publisher
+        run: |
+          curl -fsSL -o mcp-publisher.tar.gz \
+            "https://github.com/modelcontextprotocol/registry/releases/download/v${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz"
+          echo "${MCP_PUBLISHER_SHA256}  mcp-publisher.tar.gz" | sha256sum --check --strict
+          tar -xzf mcp-publisher.tar.gz mcp-publisher
+
+      - name: Verify server.json matches the tag
+        run: |
+          version="$(jq -r .version server.json)"
+          if [ "v${version}" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::server.json version ${version} does not match tag ${GITHUB_REF_NAME}."
+            exit 1
+          fi
+
+      - name: Log in with GitHub OIDC
+        run: ./mcp-publisher login github-oidc
+
+      - name: Publish server.json
+        run: ./mcp-publisher publish
