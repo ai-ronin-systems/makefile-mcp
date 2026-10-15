@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+from makefile_mcp.audit import AuditLog
 from makefile_mcp.catalog import Catalog, Contexts
 from makefile_mcp.config import load_config_state
 from makefile_mcp.doctor import run_doctor
@@ -125,6 +126,7 @@ def build_application(start: Path | None = None, *, legacy_auto_run: bool = Fals
         catalog=catalog,
         runner=SubprocessRunner(),
         lock=FileContextLock(root),
+        audit=AuditLog(root, loaded.config.audit),
     )
     return Application(
         root=root,

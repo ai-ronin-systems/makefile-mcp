@@ -72,12 +72,16 @@ class VariableSpec(StrictModel):
     description: str | None = None
     values: list[str] = Field(default_factory=list)
     default: str | int | bool | None = None
+    # Secret values are masked in the audit log. They still reach Make as declared.
+    secret: bool = False
 
     @model_validator(mode="after")
     def validate_shape(self) -> "VariableSpec":
         """Validate type-specific required/default and enum/default constraints."""
         if self.required and self.default is not None:
             raise ValueError("required variables cannot define a default")
+        if self.secret and self.default is not None:
+            raise ValueError("secret variables cannot define a default")
 
         if self.type == VariableType.ENUM:
             if not self.values:
@@ -222,6 +226,14 @@ class DefaultsConfig(StrictModel):
     require_approval: list[TaskRisk] = Field(default_factory=lambda: [TaskRisk.DANGEROUS])
 
 
+class AuditConfig(StrictModel):
+    """Optional JSON-lines audit log of task invocations, with size-based rotation."""
+
+    path: str
+    max_bytes: int = Field(default=10_485_760, gt=0)
+    backup_count: int = Field(default=3, ge=0)
+
+
 class ContextConfig(StrictModel):
     """Relative repository directory defining one governed execution context."""
 
@@ -299,6 +311,7 @@ class MakefileMcpConfig(StrictModel):
     tasks: dict[str, TaskConfig] = Field(default_factory=dict)
     capabilities: dict[str, str] = Field(default_factory=dict)
     environment: EnvironmentConfig = Field(default_factory=EnvironmentConfig)
+    audit: AuditConfig | None = None
 
     @field_validator("schema_version")
     @classmethod
