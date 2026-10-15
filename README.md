@@ -4,11 +4,23 @@
 
 **Expose trusted GNU Make targets to AI agents — without exposing a generic shell or replacing Make with another workflow system.**
 
-Makefile MCP turns an existing Makefile into typed MCP tools. It is **zero-config by default** for trusted local use and **deny-by-default when governed**.
+Makefile MCP turns an existing Makefile into typed MCP tools. It is **zero-config and run-safe by default**, and **deny-by-default when governed**.
 
 ```text
 Makefile  →  Makefile MCP  →  Codex / Claude / LangChain / Cursor / VS Code / MCP client
 ```
+
+## Threat model
+
+| Protected | Not protected |
+| --- | --- |
+| Agents cannot run arbitrary shell commands, only exposed Make targets. | A malicious or buggy Makefile: recipes are trusted code, not sandboxed. |
+| Without config, agents can only run `test`, `lint`, `check`, and `fmt`. | A target the operator chose to expose doing something destructive. |
+| Governed mode runs only allow-listed `(context, target)` pairs with typed, validated inputs. | Host or container privileges granted outside Makefile MCP. |
+| `dangerous` tasks need explicit human approval through the MCP client; no approval, no run. | An MCP client that auto-approves elicitation without a human. |
+| Every governed call can be written to an audit log, with secret inputs masked. | Secrets a recipe prints in ways that differ from the input value. |
+
+Details: [SECURITY.md](SECURITY.md) and [docs/security.md](docs/security.md).
 
 ## Quick start
 
@@ -27,7 +39,7 @@ lint: ## Run lint
 	ruff check .
 ```
 
-Makefile MCP exposes `make_test` and `make_lint` as MCP tools.
+Makefile MCP exposes `make_test` and `make_lint` as MCP tools. Other targets are listed but not runnable until you govern them.
 
 ```bash
 makefile-mcp list
@@ -84,7 +96,7 @@ See [Architecture](docs/architecture.md).
 
 ## Governed mode
 
-Without `.makefile-mcp.yaml`, Makefile MCP runs in **auto mode**: every conservatively discovered root target is callable, with no caller-controlled Make variables.
+Without `.makefile-mcp.yaml`, Makefile MCP runs in **auto mode**: every conservatively discovered root target is listed, but only `test`, `lint`, `check`, and `fmt` can run, with no caller-controlled Make variables. `--legacy-auto-run` restores the old run-everything behavior (deprecated).
 
 Add `.makefile-mcp.yaml` to switch to explicit governance:
 
@@ -110,9 +122,12 @@ tasks:
 
 capabilities:
   verify: test
+
+audit:
+  path: .makefile-mcp/audit.jsonl
 ```
 
-Only enabled `(context, target)` pairs are callable. See [Governed mode](docs/governed_mode.md), [Configuration](docs/configuration.md), and [Contexts and capabilities](docs/contexts_and_capabilities.md).
+Only enabled `(context, target)` pairs are callable. `dangerous` tasks additionally need human approval (`defaults.require_approval`), and `audit` writes one JSON line per call. See [Governed mode](docs/governed_mode.md), [Configuration](docs/configuration.md), and [Contexts and capabilities](docs/contexts_and_capabilities.md).
 
 ## MCP presentations
 

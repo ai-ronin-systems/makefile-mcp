@@ -13,6 +13,7 @@ defaults:
   timeout_seconds: 600
   output_limit_bytes: 1048576
   input_limit_bytes: 1048576
+  require_approval: [dangerous]
 
 contexts:
   backend:
@@ -38,6 +39,9 @@ tasks:
         type: path
       MESSAGE:
         type: string
+      API_TOKEN:
+        type: string
+        secret: true
 
   deploy:
     enabled: false
@@ -51,6 +55,11 @@ environment:
   inherit: [PATH, HOME, USER]
   allow:
     CI: "1"
+
+audit:
+  path: .makefile-mcp/audit.jsonl
+  max_bytes: 10485760
+  backup_count: 3
 ```
 
 Unknown fields are rejected.
@@ -75,6 +84,7 @@ defaults:
 - `timeout_seconds`: default task timeout; positive integer.
 - `output_limit_bytes`: retained bound **per stream**, applied independently to stdout and stderr; minimum 4 KiB, maximum 16 MiB per stream.
 - `input_limit_bytes`: maximum encoded caller-input mapping and arbitrary-string JSON payload; 1 byte to 16 MiB.
+- `require_approval`: risk levels that need explicit human approval before running (or previewing); default `[dangerous]`, `[]` disables. Over MCP the server asks through elicitation and refuses when the client cannot ask; the CLI prompts on a TTY, accepts `--yes`, and refuses otherwise.
 
 ## `contexts`
 
@@ -149,10 +159,11 @@ Variable fields:
 | `description` | none | client/schema help text |
 | `values` | `[]` | non-empty allowlist required only for `enum` |
 | `default` | none | fallback value validated under the declared type |
+| `secret` | `false` | mask the value in the audit log (arguments and output tail); cannot have a `default` |
 
-`required: true` and `default` are mutually exclusive and rejected.
+`required: true` and `default` are mutually exclusive and rejected. `secret` only affects auditing: the value still reaches Make as its type dictates, so prefer `type: string` for secrets to keep them off the `make` command line.
 
-Variable names must be ordinary identifiers, must not be Python keywords such as `class` or `async`, and cannot use reserved GNU Make and Makefile MCP control names. `preview` is also reserved because it is the cross-presentation Makefile MCP execution-preview control. The Python-keyword restriction keeps one governed contract valid in both generic and direct MCP presentations. A variable cannot be both `required: true` and have a `default`; those contracts are contradictory and are rejected at configuration load.
+Variable names must be ordinary identifiers, must not be Python keywords such as `class` or `async`, and cannot use reserved GNU Make and Makefile MCP control names. `preview` and `approval` are also reserved because it is the cross-presentation Makefile MCP execution-preview control. The Python-keyword restriction keeps one governed contract valid in both generic and direct MCP presentations. A variable cannot be both `required: true` and have a `default`; those contracts are contradictory and are rejected at configuration load.
 
 ### `token`
 
@@ -254,6 +265,18 @@ environment:
 Using only `inherit: [API_TOKEN]` intentionally removes `PATH`, `HOME`, and `USER` from the inherited set. If no effective `PATH` is supplied, process execution falls back to the platform default executable-search path. `makefile-mcp doctor` checks GNU Make availability against this same effective `PATH`.
 
 GNU Make and Makefile MCP control variables are rejected. Environment configuration is trusted operator policy; see [Security](security.md#make-variables-and-process-environments).
+
+## `audit`
+
+```yaml
+audit:
+  path: .makefile-mcp/audit.jsonl   # relative to the repository root
+  max_bytes: 10485760               # rotate after this size
+  backup_count: 3                   # rotated files kept
+```
+
+Optional. Appends one JSON line per run attempt, including refusals for missing approval:
+`timestamp`, `task`, `context`, `arguments` (secrets masked), `risk`, `approval` (`not_required`, `approved`, `denied`, `unavailable`), `preview`, `status` (`refused` when not run), `exit_code`, `duration_ms`, `output_bytes`, and `output_tail` (last 2000 characters, secrets masked). Requests rejected earlier (unknown task, invalid input) are not logged.
 
 ## Exposure and presentation are not configuration keys
 

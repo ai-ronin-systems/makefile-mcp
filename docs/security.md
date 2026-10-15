@@ -24,8 +24,10 @@ Timeouts, bounded output, process-group cleanup, stdin isolation, and locking ar
 
 Makefile MCP has two exposure policies:
 
-- **auto mode** — no `.makefile-mcp.yaml`; every conservatively discovered root target is callable and caller variables are disabled;
+- **auto mode** — no `.makefile-mcp.yaml`; every conservatively discovered root target is listed, only `test`, `lint`, `check`, and `fmt` can run, and caller variables are disabled (`--legacy-auto-run` lifts the run restriction);
 - **governed mode** — `.makefile-mcp.yaml` exists; only explicitly enabled `(context, target)` pairs are callable and only declared inputs are accepted.
+
+In governed mode, tasks whose risk is in `defaults.require_approval` (default `[dangerous]`) also need human approval per run, obtained through MCP elicitation; clients that cannot elicit are refused. An MCP client that auto-approves elicitation defeats this control. The optional `audit` log records every run attempt and its approval outcome, masking `secret: true` inputs.
 
 Governed-mode behavior and setup are documented in [Governed mode](governed_mode.md). This document focuses on security properties rather than the configuration workflow.
 

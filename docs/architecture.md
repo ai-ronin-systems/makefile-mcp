@@ -90,7 +90,7 @@ SRP is applied at module scale:
 
 ### Auto
 
-When `.makefile-mcp.yaml` is absent, every conservatively discovered root target becomes callable. Tasks are parameterless and use default limits/risk metadata.
+When `.makefile-mcp.yaml` is absent, every conservatively discovered root target is listed, but only `test`, `lint`, `check`, and `fmt` are runnable (`--legacy-auto-run` lifts this). Tasks are parameterless and use default limits/risk metadata.
 
 ### Governed
 

@@ -5,13 +5,14 @@
 ## Global options
 
 ```text
-makefile-mcp [--root PATH] [--version] COMMAND ...
+makefile-mcp [--root PATH] [--version] [--legacy-auto-run] COMMAND ...
 ```
 
 | Option | Meaning |
 | --- | --- |
 | `--root PATH` | Start repository-root detection from `PATH`; defaults to the current directory. |
 | `--version` | Print the Makefile MCP package version and exit. |
+| `--legacy-auto-run` | Auto mode only: let every discovered target run, not just `test`, `lint`, `check`, `fmt`. Prints a warning; deprecated. |
 
 `--root` is a **root-detection starting path**, not a forced Makefile directory. Makefile MCP searches upward for the nearest `.makefile-mcp.yaml` or `.git` boundary; only when neither exists does it fall back to the nearest conventional `Makefile`. This prevents a distant parent policy from binding a nearer repository boundary.
 
@@ -36,7 +37,7 @@ Describes one callable task after discovery and exposure policy have been applie
 ## `run`
 
 ```text
-makefile-mcp run TASK [KEY=VALUE ...] [--context NAME] [--preview] [--json]
+makefile-mcp run TASK [KEY=VALUE ...] [--context NAME] [--preview] [--yes] [--json]
 ```
 
 Runs one callable target through the common execution path.
@@ -44,6 +45,7 @@ Runs one callable target through the common execution path.
 - caller variables use `KEY=VALUE` syntax and must be declared in governed mode;
 - duplicate variables are rejected;
 - `--preview` adds GNU Make `--dry-run` to the authorized invocation; it is **not** a sandbox;
+- tasks whose risk needs approval prompt on a TTY; `--yes` approves non-interactively, and without a TTY or `--yes` they are refused;
 - `--json` emits the normalized `TaskResult`.
 
 ### Task result contract

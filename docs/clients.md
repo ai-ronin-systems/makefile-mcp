@@ -18,7 +18,7 @@ Use an absolute path and replace `/absolute/path/to/repo` in every example.
 - `generic`: stable `list_tasks`, `describe_task`, and `run_task` tools. Useful for orchestration code or very large/dynamic catalogs.
 - `both`: exposes both views of the same authorization/execution core. Use only when the client genuinely benefits from both.
 
-For governed agent access, create `.makefile-mcp.yaml` before connecting the client. Auto mode intentionally exposes every conservatively discovered root target and is intended only for trusted local use.
+For governed agent access, create `.makefile-mcp.yaml` before connecting the client. Auto mode lists every conservatively discovered root target but only runs `test`, `lint`, `check`, and `fmt`. Approval for `dangerous` tasks uses MCP elicitation, so use a client that supports it and asks a human.
 
 ## Codex
 
