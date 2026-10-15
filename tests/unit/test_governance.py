@@ -1,10 +1,12 @@
 import asyncio
 
 import pytest
+from mcp import Client, types
 
 from makefile_mcp.app import build_application
 from makefile_mcp.errors import ApprovalRequired, TaskNotRunnable
-from makefile_mcp.mcp.presentation import build_direct_tools
+from makefile_mcp.mcp.presentation import McpPresentation, build_direct_tools
+from makefile_mcp.mcp.server import create_server
 
 AUTO_MAKEFILE = ".PHONY: test deploy\ntest:\n\t@echo testing\ndeploy:\n\t@echo deploying\n"
 
@@ -58,3 +60,38 @@ def test_require_approval_is_configurable(app_for):
 
     with pytest.raises(ApprovalRequired):
         asyncio.run(app.run_task("build"))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["auto", "legacy"])
+@pytest.mark.parametrize("answer", [True, False])
+async def test_mcp_asks_the_human_through_elicitation(app_for, answer, mode):
+    app = app_for(DEPLOY_MAKEFILE, DANGEROUS)
+    prompts = []
+
+    async def elicit(context, params):
+        prompts.append(params.message)
+        return types.ElicitResult(action="accept", content={"approve": answer})
+
+    async with Client(
+        create_server(app, McpPresentation.BOTH), elicitation_callback=elicit, mode=mode
+    ) as client:
+        tools = await client.list_tools()
+        assert all("approval" not in tool.input_schema["properties"] for tool in tools.tools)
+        generic = await client.call_tool("run_task", {"task": "deploy"})
+        direct = await client.call_tool("make_deploy", {})
+
+    assert prompts == ["Approve dangerous Make target 'deploy'?"] * 2
+    assert generic.is_error is not answer
+    assert direct.is_error is not answer
+
+
+@pytest.mark.asyncio
+async def test_mcp_refuses_when_client_cannot_elicit(app_for):
+    app = app_for(DEPLOY_MAKEFILE, DANGEROUS)
+
+    async with Client(create_server(app, McpPresentation.GENERIC)) as client:
+        result = await client.call_tool("run_task", {"task": "deploy"})
+
+    assert result.is_error is True
+    assert "approval" in result.content[0].text

@@ -2,13 +2,16 @@
 
 import inspect
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Annotated, Any
 
 from mcp.server import MCPServer
-from mcp.server.mcpserver import Context
+from mcp.server.elicitation import AcceptedElicitation, ElicitationResult
+from mcp.server.mcpserver import Context, Elicit, Resolve
 from mcp.types import ToolAnnotations
+from pydantic import BaseModel, Field
 
 from makefile_mcp.app import Application, build_application
+from makefile_mcp.execution import Approver
 from makefile_mcp.mcp.presentation import (
     DirectTool,
     McpPresentation,
@@ -16,6 +19,7 @@ from makefile_mcp.mcp.presentation import (
     response_success,
     task_response,
 )
+from makefile_mcp.models import TaskDefinition
 from makefile_mcp.version import __version__
 
 READ_ONLY = ToolAnnotations(read_only_hint=True, open_world_hint=False)
@@ -25,6 +29,38 @@ EXECUTE = ToolAnnotations(
     idempotent_hint=False,
     open_world_hint=True,
 )
+
+
+class Approval(BaseModel):
+    """Elicitation form shown to the human before a risky task runs."""
+
+    approve: bool = Field(description="Allow this Make target to run now?")
+
+
+def _ask_approval(
+    app: Application, ctx: Context, task: str, context: str
+) -> Approval | Elicit[Approval] | None:
+    """Decide whether to ask the human; ``None`` means the client cannot ask."""
+    definition = app.describe_task(task, context)
+    if not app.needs_approval(definition):
+        return Approval(approve=True)
+    capabilities = ctx.client_capabilities
+    if capabilities is None or capabilities.elicitation is None:
+        return None
+    label = task if context == "root" else f"{context}:{task}"
+    return Elicit(f"Approve {definition.risk} Make target {label!r}?", Approval)
+
+
+def _approver(outcome: ElicitationResult[Approval]) -> Approver | None:
+    """Turn an elicitation outcome into the executor's approval callback."""
+    if isinstance(outcome, AcceptedElicitation) and outcome.data is None:
+        return None
+    granted = isinstance(outcome, AcceptedElicitation) and outcome.data.approve
+
+    async def approve(task: TaskDefinition) -> bool:
+        return granted
+
+    return approve
 
 
 async def _run_with_progress(
@@ -46,10 +82,17 @@ async def _run_with_progress(
     return result
 
 
-def _progress_direct_callable(direct: DirectTool) -> Any:
+def _progress_direct_callable(app: Application, direct: DirectTool) -> Any:
     """Wrap one generated direct tool with MCP Context progress, preserving its schema."""
 
-    async def run_direct_with_progress(ctx: Context, **kwargs: Any) -> dict[str, Any]:
+    async def ask(ctx: Context) -> Approval | Elicit[Approval] | None:
+        return _ask_approval(app, ctx, direct.task.name, direct.task.context)
+
+    approval_annotation = Annotated[ElicitationResult[Approval], Resolve(ask)]
+
+    async def run_direct_with_progress(
+        ctx: Context, approval: ElicitationResult[Approval], **kwargs: Any
+    ) -> dict[str, Any]:
         preview = bool(kwargs.get("preview", False))
         label = direct.task.name
         if direct.task.context != "root":
@@ -57,7 +100,7 @@ def _progress_direct_callable(direct: DirectTool) -> Any:
         return await _run_with_progress(
             ctx,
             label,
-            lambda: direct.fn(**kwargs),
+            lambda: direct.fn(_approver(approval), **kwargs),
             preview=preview,
         )
 
@@ -69,6 +112,15 @@ def _progress_direct_callable(direct: DirectTool) -> Any:
             annotation=Context,
         )
     )
+    parameters.append(
+        inspect.Parameter(
+            "approval",
+            kind=inspect.Parameter.KEYWORD_ONLY,
+            annotation=approval_annotation,
+        )
+    )
+    # The SDK finds resolved parameters through type hints, not the signature.
+    run_direct_with_progress.__annotations__["approval"] = approval_annotation
     run_direct_with_progress.__name__ = direct.name
     run_direct_with_progress.__qualname__ = direct.name
     run_direct_with_progress.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
@@ -84,8 +136,11 @@ async def _generic_task_call(
     variables: dict[str, str],
     context: str,
     preview: bool,
+    approve: Approver | None,
 ) -> dict[str, Any]:
-    return task_response(await app.run_task(task, variables, context, preview=preview))
+    return task_response(
+        await app.run_task(task, variables, context, preview=preview, approve=approve)
+    )
 
 
 def _register_generic_tools(server: MCPServer, app: Application) -> None:
@@ -107,9 +162,13 @@ def _register_generic_tools(server: MCPServer, app: Application) -> None:
         """Describe a callable Make target, variables, risk, and timeout."""
         return response_success(app.describe_task(task, context))
 
+    async def ask(ctx: Context, task: str, context: str) -> Approval | Elicit[Approval] | None:
+        return _ask_approval(app, ctx, task, context)
+
     async def run_task(
         task: str,
         ctx: Context,
+        approval: Annotated[ElicitationResult[Approval], Resolve(ask)],
         variables: dict[str, str] | None = None,
         context: str = "root",
         preview: bool = False,
@@ -119,7 +178,9 @@ def _register_generic_tools(server: MCPServer, app: Application) -> None:
         return await _run_with_progress(
             ctx,
             label,
-            lambda: _generic_task_call(app, task, variables or {}, context, preview),
+            lambda: _generic_task_call(
+                app, task, variables or {}, context, preview, _approver(approval)
+            ),
             preview=preview,
         )
 
@@ -150,7 +211,7 @@ def _register_direct_tools(server: MCPServer, app: Application) -> None:
     """Register a startup snapshot with one typed MCP tool per callable task/context."""
     for direct in build_direct_tools(app):
         server.add_tool(
-            _progress_direct_callable(direct),
+            _progress_direct_callable(app, direct),
             name=direct.name,
             title=direct.title,
             description=direct.description,
