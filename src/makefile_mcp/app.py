@@ -7,7 +7,7 @@ from makefile_mcp.catalog import Catalog, Contexts
 from makefile_mcp.config import load_config_state
 from makefile_mcp.doctor import run_doctor
 from makefile_mcp.errors import ConfigurationError
-from makefile_mcp.execution import TaskExecutor
+from makefile_mcp.execution import Approver, TaskExecutor
 from makefile_mcp.filesystem import (
     FileContextLock,
     Fingerprint,
@@ -78,10 +78,18 @@ class Application:
         context: str = "root",
         *,
         preview: bool = False,
+        approve: Approver | None = None,
     ) -> TaskResult:
-        """Execute or preview one callable task through the shared bounded executor."""
+        """Execute or preview one callable task through the shared bounded executor.
+
+        ``approve`` asks a human to confirm risky tasks; without it they are refused.
+        """
         self._ensure_policy_current()
-        return await self.executor.run(task, variables, context, preview=preview)
+        return await self.executor.run(task, variables, context, preview=preview, approve=approve)
+
+    def needs_approval(self, task: TaskDefinition) -> bool:
+        """Return whether policy requires human approval before *task* runs."""
+        return self.executor.needs_approval(task)
 
     def doctor(self) -> DoctorResult:
         """Run read-only diagnostics against repository, policy, and discovery state."""

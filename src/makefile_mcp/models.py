@@ -218,6 +218,8 @@ class DefaultsConfig(StrictModel):
     # Bound the complete caller input mapping before type conversion. The same limit also caps
     # the encoded arbitrary-string JSON payload written for a task invocation.
     input_limit_bytes: int = Field(default=1_048_576, ge=1, le=16_777_216)
+    # Tasks at these risk levels run only after explicit human approval.
+    require_approval: list[TaskRisk] = Field(default_factory=lambda: [TaskRisk.DANGEROUS])
 
 
 class ContextConfig(StrictModel):

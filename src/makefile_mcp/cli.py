@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import sys
 from pathlib import Path
 from typing import Annotated, Any, Never
 
@@ -11,6 +12,7 @@ from pydantic import BaseModel
 from makefile_mcp.app import Application, build_application
 from makefile_mcp.errors import MakefileMcpError
 from makefile_mcp.mcp import McpPresentation
+from makefile_mcp.models import TaskDefinition
 from makefile_mcp.version import __version__
 
 cli = typer.Typer(
@@ -155,9 +157,17 @@ def run_command(
             help="Ask GNU Make for a --dry-run preview; this is not a side-effect-free sandbox.",
         ),
     ] = False,
+    yes: Annotated[
+        bool,
+        typer.Option("--yes", "-y", help="Approve tasks whose risk requires human approval."),
+    ] = False,
     json_output: Annotated[bool, typer.Option("--json")] = False,
 ) -> None:
     """Execute or preview one callable task with optional declared ``KEY=VALUE`` inputs."""
+
+    async def approve(definition: TaskDefinition) -> bool:
+        return yes or typer.confirm(f"Run {definition.risk} task {definition.name!r}?")
+
     variables: dict[str, str] = {}
     for item in assignments or []:
         if "=" not in item:
@@ -169,7 +179,10 @@ def run_command(
             raise typer.Exit(code=2)
         variables[key] = value
     try:
-        result = asyncio.run(_app().run_task(task, variables, context, preview=preview))
+        approver = approve if yes or sys.stdin.isatty() else None
+        result = asyncio.run(
+            _app().run_task(task, variables, context, preview=preview, approve=approver)
+        )
     except MakefileMcpError as exc:
         _fail(exc)
     if json_output:

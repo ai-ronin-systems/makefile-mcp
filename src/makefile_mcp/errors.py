@@ -29,6 +29,10 @@ class TaskNotRunnable(MakefileMcpError):
     """A listed auto-mode target is not in the safe auto-run set."""
 
 
+class ApprovalRequired(MakefileMcpError):
+    """A risky task was not approved by a human."""
+
+
 class VariableValidationError(MakefileMcpError):
     """Caller input violates a declared task-variable contract."""
 

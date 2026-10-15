@@ -1,22 +1,27 @@
 """Orchestrate one authorized Make task through the bounded process boundary."""
 
 import os
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
 from makefile_mcp.catalog import AUTO_RUN_TARGETS, Catalog, Contexts
-from makefile_mcp.errors import ExecutionStartError, TaskNotRunnable
+from makefile_mcp.errors import ApprovalRequired, ExecutionStartError, TaskNotRunnable
 from makefile_mcp.filesystem import FileContextLock
 from makefile_mcp.inputs import make_variables, string_input_file, validate_variables
 from makefile_mcp.models import (
     EnvironmentConfig,
     MakefileMcpConfig,
     ProcessResult,
+    TaskDefinition,
     TaskResult,
     TaskStatus,
 )
 from makefile_mcp.process import SubprocessRunner
 from makefile_mcp.syntax import MAKEFILE_MCP_INPUT_VARIABLE
+
+# Asks a human whether one risky task may run. ``None`` means nobody can be asked.
+Approver = Callable[[TaskDefinition], Awaitable[bool]]
 
 
 def build_make_argv(
@@ -80,6 +85,18 @@ class TaskExecutor:
         self.runner = runner
         self.lock = lock
 
+    def needs_approval(self, task: TaskDefinition) -> bool:
+        """Return whether policy requires a human to approve this task before it runs."""
+        return task.risk in self.config.defaults.require_approval
+
+    async def _approval(self, task: TaskDefinition, approve: Approver | None) -> str:
+        """Return the approval outcome for one task: not_required, approved, denied, unavailable."""
+        if not self.needs_approval(task):
+            return "not_required"
+        if approve is None:
+            return "unavailable"
+        return "approved" if await approve(task) else "denied"
+
     async def run(
         self,
         task_name: str,
@@ -87,6 +104,7 @@ class TaskExecutor:
         context: str = "root",
         *,
         preview: bool = False,
+        approve: Approver | None = None,
     ) -> TaskResult:
         """Execute one callable task and return a stable bounded result."""
         task = self.catalog.describe(task_name, context)
@@ -103,15 +121,31 @@ class TaskExecutor:
             cwd=project_context.directory,
             input_limit_bytes=self.config.defaults.input_limit_bytes,
         )
+        approval = await self._approval(task, approve)
+        if approval in {"denied", "unavailable"}:
+            raise ApprovalRequired(
+                f"{task.risk} task {task.name!r} needs human approval ({approval})"
+            )
+        return await self._execute(task, validated, project_context.directory, preview)
+
+    async def _execute(
+        self,
+        task: TaskDefinition,
+        validated: dict[str, str],
+        directory: Path,
+        preview: bool,
+    ) -> TaskResult:
+        """Run one authorized, validated, approved task through the bounded process boundary."""
+        context = task.context
 
         process: ProcessResult | None = None
         try:
             # Catalog discovery is always against this exact conventional Makefile. Resolve it
             # inside the normalized preparation boundary so a deletion/permission race becomes
             # a stable ERROR result instead of leaking a raw filesystem exception.
-            makefile = (project_context.directory / "Makefile").resolve(strict=True)
+            makefile = (directory / "Makefile").resolve(strict=True)
             with (
-                self.lock.acquire(context, directory=project_context.directory),
+                self.lock.acquire(context, directory=directory),
                 string_input_file(
                     task,
                     validated,
@@ -128,7 +162,7 @@ class TaskExecutor:
                         string_input_file=payload_file,
                         preview=preview,
                     ),
-                    cwd=project_context.directory,
+                    cwd=directory,
                     timeout_seconds=task.timeout_seconds,
                     env=build_environment(self.config.environment),
                     output_limit_bytes=self.config.defaults.output_limit_bytes,
