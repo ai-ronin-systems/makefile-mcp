@@ -6,6 +6,8 @@ from pathlib import Path
 from makefile_mcp.mcp.presentation import McpPresentation
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+# PyPI renders README.md without the repository, so its links must be absolute.
+REPO_BLOB = "https://github.com/ai-ronin-systems/makefile-mcp/blob/main/"
 CANONICAL_DOCS = {
     "README.md",
     "SECURITY.md",
@@ -65,10 +67,14 @@ def test_relative_markdown_links_and_local_anchors_resolve():
     for source in _markdown_files():
         text = source.read_text(encoding="utf-8")
         for target in _LINK.findall(text):
-            if target.startswith(("http://", "https://", "mailto:")):
+            if target.startswith(REPO_BLOB):
+                target_path, _, fragment = target.removeprefix(REPO_BLOB).partition("#")
+                destination = PROJECT_ROOT / target_path
+            elif target.startswith(("http://", "https://", "mailto:")):
                 continue
-            target_path, _, fragment = target.partition("#")
-            destination = source if not target_path else (source.parent / target_path).resolve()
+            else:
+                target_path, _, fragment = target.partition("#")
+                destination = source if not target_path else (source.parent / target_path).resolve()
             if not destination.is_file():
                 problems.append(f"{source.relative_to(PROJECT_ROOT)} -> missing {target}")
                 continue
@@ -121,3 +127,13 @@ def test_documented_mcp_presentations_match_runtime_enum():
 def test_configuration_reference_tracks_schema_version_one():
     documented = (PROJECT_ROOT / "docs/configuration.md").read_text(encoding="utf-8")
     assert "Current schema version: `1`." in documented
+
+
+def test_readme_links_work_on_pypi():
+    readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
+    relative = [
+        target
+        for target in _LINK.findall(readme)
+        if not target.startswith(("http://", "https://", "mailto:"))
+    ]
+    assert relative == []
