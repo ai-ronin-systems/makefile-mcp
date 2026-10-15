@@ -4,6 +4,25 @@ All notable changes to Makefile MCP are documented here.
 
 ## Unreleased
 
+## 0.2.2 — 2026-10-15
+
+### Changed
+
+- Update the MCP Python SDK to 2.1.1 (exact pin), along with pydantic, typer, and dev tooling.
+
+### Fixed
+
+- MCP clients see the reason a call failed: Make diagnostics, invalid inputs, approval refusals,
+  and unknown tasks are reported as tool errors with their messages. SDK 2.1 otherwise replaces
+  them with a generic "Error executing tool". Unexpected internal errors stay hidden.
+
+### Added
+
+- Releases are listed in the official MCP Registry as `io.github.ai-ronin-systems/makefile-mcp`,
+  published by the release workflow with short-lived GitHub OIDC credentials.
+- Releases publish only after the full CI matrix passes on the tagged commit; signing and
+  publishing jobs run no project code and use no dependency cache.
+
 ## 0.2.1 — 2026-10-15
 
 Documentation-only release; no code behavior changes.
