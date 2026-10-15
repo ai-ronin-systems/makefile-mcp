@@ -25,6 +25,10 @@ class TaskNotExposed(MakefileMcpError):
     """A discovered target is hidden by governed exposure policy."""
 
 
+class TaskNotRunnable(MakefileMcpError):
+    """A listed auto-mode target is not in the safe auto-run set."""
+
+
 class VariableValidationError(MakefileMcpError):
     """Caller input violates a declared task-variable contract."""
 

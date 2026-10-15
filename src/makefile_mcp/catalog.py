@@ -8,6 +8,9 @@ from makefile_mcp.filesystem import Fingerprint, ensure_within_root, fingerprint
 from makefile_mcp.makefile import StaticMakeInspector
 from makefile_mcp.models import MakefileMcpConfig, ProjectContext, TaskDefinition, TaskRisk
 
+# Without governance, only these conventional targets may run. Everything else is listed only.
+AUTO_RUN_TARGETS = frozenset({"test", "lint", "check", "fmt"})
+
 
 def _fingerprint(paths: list[Path]) -> Fingerprint:
     """Normalize filesystem fingerprint failures into the discovery error boundary."""
@@ -62,12 +65,14 @@ class Catalog:
         contexts: Contexts,
         inspector: StaticMakeInspector,
         governed: bool,
+        legacy_auto_run: bool = False,
     ):
         """Create a catalog over one immutable configuration/exposure mode."""
         self.config = config
         self.contexts = contexts
         self.inspector = inspector
         self.governed = governed
+        self.legacy_auto_run = legacy_auto_run
         self._cache: dict[str, tuple[Fingerprint, CatalogSnapshot]] = {}
 
     def snapshot(self, context_name: str = "root") -> CatalogSnapshot:
@@ -82,15 +87,16 @@ class Catalog:
         tasks: dict[str, TaskDefinition] = {}
         for name, target in raw.targets.items():
             if not self.governed:
-                # Auto mode mirrors lightweight Makefile MCP servers: every target our conservative
-                # inspector can identify is callable. Inputs stay parameterless because there is
-                # no operator-declared variable contract.
+                # Auto mode lists every target our conservative inspector can identify, but only
+                # conventional safe targets run. Inputs stay parameterless because there is no
+                # operator-declared variable contract.
                 tasks[name] = TaskDefinition(
                     name=name,
                     description=target.description,
                     context=context_name,
                     risk=TaskRisk.UNKNOWN,
                     timeout_seconds=self.config.defaults.timeout_seconds,
+                    runnable=self.legacy_auto_run or name in AUTO_RUN_TARGETS,
                 )
                 continue
 

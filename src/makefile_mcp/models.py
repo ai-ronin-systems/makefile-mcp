@@ -148,6 +148,8 @@ class TaskDefinition(StrictModel):
     risk: TaskRisk = TaskRisk.UNKNOWN
     timeout_seconds: int = Field(default=600, gt=0)
     variables: dict[str, VariableSpec] = Field(default_factory=dict)
+    # Auto mode lists every discovered target but runs only conventional safe ones.
+    runnable: bool = True
 
     @field_validator("variables")
     @classmethod

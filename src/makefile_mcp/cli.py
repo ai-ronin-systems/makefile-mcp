@@ -24,6 +24,7 @@ class State:
     """Mutable CLI process state shared by Typer command callbacks."""
 
     root: Path | None = None
+    legacy_auto_run: bool = False
     application: Application | None = None
 
 
@@ -32,7 +33,13 @@ state = State()
 
 def _app() -> Application:
     if state.application is None:
-        state.application = build_application(state.root)
+        state.application = build_application(state.root, legacy_auto_run=state.legacy_auto_run)
+        if state.legacy_auto_run and not state.application.governed:
+            typer.echo(
+                "warning: --legacy-auto-run lets agents run every discovered target; "
+                "prefer a governed .makefile-mcp.yaml",
+                err=True,
+            )
     return state.application
 
 
@@ -74,9 +81,17 @@ def callback(
             help="Show the Makefile MCP version and exit.",
         ),
     ] = False,
+    legacy_auto_run: Annotated[
+        bool,
+        typer.Option(
+            "--legacy-auto-run",
+            help="Auto mode only: allow running every discovered target (unsafe, deprecated).",
+        ),
+    ] = False,
 ) -> None:
     """Set the repository root used by subsequent CLI commands."""
     state.root = root
+    state.legacy_auto_run = legacy_auto_run
     state.application = None
 
 

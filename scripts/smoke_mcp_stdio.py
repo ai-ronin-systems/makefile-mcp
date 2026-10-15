@@ -15,7 +15,7 @@ async def _smoke() -> None:
     with tempfile.TemporaryDirectory(prefix="makefile-mcp-smoke-") as tmp:
         root = Path(tmp)
         (root / "Makefile").write_text(
-            ".PHONY: hello\nhello: ## Package MCP smoke\n\t@echo mcp-smoke-ok\n",
+            ".PHONY: test\ntest: ## Package MCP smoke\n\t@echo mcp-smoke-ok\n",
             encoding="utf-8",
         )
         server = StdioServerParameters(
@@ -30,7 +30,7 @@ async def _smoke() -> None:
 
             result = await client.call_tool(
                 "run_task",
-                {"task": "hello", "context": "root"},
+                {"task": "test", "context": "root"},
             )
             assert result.is_error is False
             assert result.structured_content is not None

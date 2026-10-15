@@ -272,11 +272,11 @@ package-smoke: ## Install and exercise built wheel/sdist artifacts in a clean Li
 		python -m pip install --disable-pip-version-check --no-cache-dir /dist/*.whl >/dev/null; \
 		makefile-mcp --version; \
 		tmp="$$(mktemp -d)"; \
-		printf "hello: ## Clean-container package smoke\n\t@echo smoke-ok\n" > "$$tmp/Makefile"; \
+		printf "test: ## Clean-container package smoke\n\t@echo smoke-ok\n" > "$$tmp/Makefile"; \
 		cd "$$tmp"; \
 		makefile-mcp doctor; \
-		makefile-mcp list | grep -q "hello"; \
-		makefile-mcp run hello | grep -q "smoke-ok"; \
+		makefile-mcp list | grep -q "test"; \
+		makefile-mcp run test | grep -q "smoke-ok"; \
 		python /smoke_mcp_stdio.py; \
 		python -m venv /tmp/makefile-mcp-sdist-venv; \
 		/tmp/makefile-mcp-sdist-venv/bin/python -m pip install --disable-pip-version-check --no-cache-dir /dist/*.tar.gz >/dev/null; \
