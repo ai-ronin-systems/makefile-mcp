@@ -19,7 +19,7 @@ BOOLEAN_VALUES = BOOLEAN_TRUE_VALUES | BOOLEAN_FALSE_VALUES
 # MAKEFILE_MCP_INPUT is owned by the executor. String inputs are serialized to a private JSON
 # payload and only this generated pathname is transported through GNU Make.
 MAKEFILE_MCP_INPUT_VARIABLE = "MAKEFILE_MCP_INPUT"
-MCP_CONTROL_PARAMETER_NAMES = frozenset({"preview"})
+MCP_CONTROL_PARAMETER_NAMES = frozenset({"preview", "approval"})
 
 # GNU Make control variables can alter parser, include, shell, recursion, search-path or
 # execution behavior. They are never caller task inputs or configurable inherited values.

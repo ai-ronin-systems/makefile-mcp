@@ -241,7 +241,8 @@ def _wire_variables(arguments: dict[str, Any]) -> dict[str, str]:
 def _direct_callable(app: Application, task: TaskDefinition, tool_name: str) -> Any:
     """Create one thin direct tool that delegates to ``Application.run_task``."""
 
-    async def run_direct(**kwargs: Any) -> dict[str, Any]:
+    # ``approve`` is positional-only so it can never collide with a task variable name.
+    async def run_direct(approve: Any = None, /, **kwargs: Any) -> dict[str, Any]:
         preview = bool(kwargs.pop("preview", False))
         return task_response(
             await app.run_task(
@@ -249,6 +250,7 @@ def _direct_callable(app: Application, task: TaskDefinition, tool_name: str) -> 
                 _wire_variables(kwargs),
                 task.context,
                 preview=preview,
+                approve=approve,
             )
         )
 
