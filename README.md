@@ -1,5 +1,10 @@
 # Makefile MCP
 
+[![PyPI](https://img.shields.io/pypi/v/makefile-mcp)](https://pypi.org/project/makefile-mcp/)
+[![Python](https://img.shields.io/pypi/pyversions/makefile-mcp)](https://pypi.org/project/makefile-mcp/)
+[![CI](https://github.com/ai-ronin-systems/makefile-mcp/actions/workflows/ci.yml/badge.svg)](https://github.com/ai-ronin-systems/makefile-mcp/actions/workflows/ci.yml)
+[![License](https://img.shields.io/pypi/l/makefile-mcp)](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/LICENSE)
+
 <!-- mcp-name: io.github.ai-ronin-systems/makefile-mcp -->
 
 **Expose trusted GNU Make targets to AI agents — without exposing a generic shell or replacing Make with another workflow system.**
