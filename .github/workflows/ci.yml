@@ -5,6 +5,8 @@ on:
     branches:
       - main
   pull_request:
+  # The release workflow calls this full gate and publishes only if it passes.
+  workflow_call:
 
 permissions:
   contents: read

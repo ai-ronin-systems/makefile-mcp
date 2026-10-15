@@ -178,3 +178,37 @@ def test_local_check_gate_enforces_branch_coverage_floor():
     assert config["tool"]["coverage"]["run"]["source"] == ["makefile_mcp"]
     assert config["tool"]["coverage"]["report"]["fail_under"] >= 85
     assert "check: format-check lint coverage doctor" in makefile
+
+
+def _workflow(name: str) -> dict:
+    import yaml
+
+    path = PROJECT_ROOT / ".github" / "workflows" / name
+    return yaml.safe_load(path.read_text(encoding="utf-8"))
+
+
+def _release_jobs() -> dict:
+    return _workflow("release.yml")["jobs"]
+
+
+def test_release_publishes_only_after_the_full_ci_gate():
+    ci = _workflow("ci.yml")
+    jobs = _release_jobs()
+    # PyYAML parses the bare `on` key as boolean True.
+    assert "workflow_call" in ci[True]
+    assert jobs["ci"]["uses"] == "./.github/workflows/ci.yml"
+    assert jobs["build"]["needs"] == "ci"
+    assert jobs["attest"]["needs"] == "build"
+    assert jobs["publish-pypi"]["needs"] == "attest"
+
+
+def test_release_isolates_oidc_from_project_code_and_caches():
+    jobs = _release_jobs()
+    minting = {name for name, job in jobs.items() if "id-token" in job.get("permissions", {})}
+    assert minting == {"attest", "publish-pypi"}
+    for name in minting:
+        steps = jobs[name]["steps"]
+        assert all(step.get("uses", "").startswith(("actions/", "pypa/")) for step in steps)
+        assert not any("run" in step for step in steps)
+    for step in jobs["build"]["steps"]:
+        assert step.get("with", {}).get("enable-cache", False) is False
