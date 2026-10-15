@@ -18,7 +18,7 @@ Makefile  →  Makefile MCP  →  Codex / Claude / LangChain / Cursor / VS Code 
 | Without config, agents can only run `test`, `lint`, `check`, and `fmt`. | A target the operator chose to expose doing something destructive. |
 | Governed mode runs only allow-listed `(context, target)` pairs with typed, validated inputs. | Host or container privileges granted outside Makefile MCP. |
 | `dangerous` tasks need explicit human approval through the MCP client; no approval, no run. | An MCP client that auto-approves elicitation without a human. |
-| Every governed call can be written to an audit log, with secret inputs masked. | Secrets a recipe prints in ways that differ from the input value. |
+| Every governed run attempt, including approval refusals, can be written to an audit log, with secret inputs masked. | Secrets a recipe prints in ways that differ from the input value. |
 
 Details: [SECURITY.md](SECURITY.md) and [docs/security.md](docs/security.md).
 
@@ -174,9 +174,9 @@ Python 3.11+ · GNU Make · Linux or macOS
 1. [**Architecture**](docs/architecture.md) — runtime flow, responsibilities, lifecycle, invariants, and dependency rules.
 2. [**Design rationale**](docs/design_rationale.md) — key tradeoffs, full product-property map, and deliberately rejected alternatives.
 3. [**CLI reference**](docs/cli.md) — commands, options, result model, root detection, and exit codes.
-4. [**Configuration**](docs/configuration.md) — authoritative `.makefile-mcp.yaml` fields, defaults, and precedence.
+4. [**Configuration**](docs/configuration.md) — authoritative `.makefile-mcp.yaml` fields, defaults, approval, audit log, and precedence.
 5. [**Static Make discovery**](docs/discovery.md) — supported syntax, fail-closed behavior, includes, limitations, and cache semantics.
-6. [**Governed mode**](docs/governed_mode.md) — explicit exposure, typed inputs, risk metadata, and operating model.
+6. [**Governed mode**](docs/governed_mode.md) — explicit exposure, typed inputs, risk metadata, human approval, and operating model.
 7. [**MCP presentations**](docs/mcp_presentations.md) — `direct`, `generic`, `both`, schemas, result/error semantics, naming, and lifecycle.
 8. [**Contexts and capabilities**](docs/contexts_and_capabilities.md) — monorepo scoping, `(context, target)` authorization, and semantic mappings.
 9. [**MCP client setup**](docs/clients.md) — Codex, Claude Code, LangChain/LangGraph, Cursor, VS Code, and `uvx` examples.

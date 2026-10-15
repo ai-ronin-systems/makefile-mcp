@@ -21,7 +21,7 @@ The repository, Makefiles, included Make code, wrapper scripts, and provisioned 
 ### Request boundary and governance
 
 - No arbitrary shell/command MCP tool: callers invoke discovered or explicitly governed Make targets.
-- Auto mode is zero-configuration for trusted local repositories and disables caller-controlled Make variables.
+- Auto mode is zero-configuration for trusted local repositories: it lists every discovered target, runs only `test`, `lint`, `check`, and `fmt`, and disables caller-controlled Make variables.
 - Governed mode is deny-by-default over `(context, target)` pairs and accepts only declared inputs.
 - GNU Make and Makefile MCP control names such as `SHELL`, `MAKEFLAGS`, `MAKEFILES`, `MAKEOVERRIDES`, `VPATH`, and `MAKEFILE_MCP_INPUT` cannot be caller task inputs.
 - `token`, `enum`, `integer`, `boolean`, and `path` inputs are validated and normalized before Make assignment transport.

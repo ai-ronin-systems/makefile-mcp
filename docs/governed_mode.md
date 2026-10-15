@@ -2,7 +2,7 @@
 
 In Makefile MCP, governed mode turns a repository's Makefile surface into an explicit agent execution contract.
 
-Use it when zero-config exposure is too broad, or when tasks need inputs, contexts, semantic capabilities, risk metadata, or task-specific execution limits.
+Use it when agents need to run more than auto mode's `test`, `lint`, `check`, and `fmt`, or when tasks need inputs, contexts, semantic capabilities, risk metadata, or task-specific execution limits.
 
 ## Enabling governed mode
 
@@ -180,7 +180,7 @@ See [MCP presentations](mcp_presentations.md).
 
 ## Recommended adoption path
 
-Start with auto mode for a trusted developer repository whose discovered Make surface is acceptable. Add `.makefile-mcp.yaml` when you need one or more of:
+Start with auto mode for a trusted developer repository where running `test`, `lint`, `check`, and `fmt` is enough. Add `.makefile-mcp.yaml` when you need one or more of:
 
 - deny-by-default target exposure;
 - task parameters;

@@ -190,8 +190,8 @@ def run_doctor(
                 code="exposure.auto",
                 severity=DoctorSeverity.WARNING,
                 message=(
-                    "auto mode exposes every conservatively discovered target; "
-                    "use .makefile-mcp.yaml (governed mode) for explicit agent authorization"
+                    "auto mode runs only check, fmt, lint, and test; "
+                    "use .makefile-mcp.yaml (governed mode) to authorize anything else"
                 ),
             )
         )
