@@ -5,6 +5,7 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
 
+from makefile_mcp.audit import AuditLog
 from makefile_mcp.catalog import AUTO_RUN_TARGETS, Catalog, Contexts
 from makefile_mcp.errors import ApprovalRequired, ExecutionStartError, TaskNotRunnable
 from makefile_mcp.filesystem import FileContextLock
@@ -76,6 +77,7 @@ class TaskExecutor:
         catalog: Catalog,
         runner: SubprocessRunner,
         lock: FileContextLock,
+        audit: AuditLog | None = None,
     ):
         """Create an executor from the shared catalog, process runner, and context lock."""
         self.root = root
@@ -84,6 +86,7 @@ class TaskExecutor:
         self.catalog = catalog
         self.runner = runner
         self.lock = lock
+        self.audit = audit or AuditLog(root, None)
 
     def needs_approval(self, task: TaskDefinition) -> bool:
         """Return whether policy requires a human to approve this task before it runs."""
@@ -123,10 +126,13 @@ class TaskExecutor:
         )
         approval = await self._approval(task, approve)
         if approval in {"denied", "unavailable"}:
+            self.audit.record(task, validated, approval=approval, preview=preview)
             raise ApprovalRequired(
                 f"{task.risk} task {task.name!r} needs human approval ({approval})"
             )
-        return await self._execute(task, validated, project_context.directory, preview)
+        result = await self._execute(task, validated, project_context.directory, preview)
+        self.audit.record(task, validated, approval=approval, result=result, preview=preview)
+        return result
 
     async def _execute(
         self,
