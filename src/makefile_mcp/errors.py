@@ -47,3 +47,7 @@ class MakeInspectionError(MakefileMcpError):
 
 class ExecutionStartError(MakefileMcpError):
     """The bounded Make subprocess could not be started."""
+
+
+class TaskFailed(MakefileMcpError):
+    """A task ran but did not pass; MCP reports this as a tool error with its diagnostics."""

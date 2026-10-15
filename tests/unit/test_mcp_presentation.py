@@ -3,6 +3,7 @@ import inspect
 
 from pydantic import TypeAdapter
 
+from makefile_mcp.errors import TaskFailed
 from makefile_mcp.mcp.presentation import McpPresentation, build_direct_tools, direct_tool_base_name
 from makefile_mcp.models import TaskDefinition
 
@@ -162,7 +163,7 @@ def test_task_response_raises_for_non_passing_execution():
         duration_ms=0,
         stderr="boom",
     )
-    with pytest.raises(RuntimeError, match="boom"):
+    with pytest.raises(TaskFailed, match="boom"):
         task_response(result)
 
 
@@ -186,7 +187,7 @@ def test_task_response_includes_both_stdout_and_stderr_for_failure():
         stdout="useful application diagnostic\n",
         stderr="make: *** target failed\n",
     )
-    with pytest.raises(RuntimeError) as exc_info:
+    with pytest.raises(TaskFailed) as exc_info:
         task_response(result)
 
     message = str(exc_info.value)
@@ -215,7 +216,7 @@ def test_task_response_diagnostic_is_bounded_in_utf8_bytes_and_marks_truncation(
         truncated=True,
     )
 
-    with pytest.raises(RuntimeError) as exc_info:
+    with pytest.raises(TaskFailed) as exc_info:
         task_response(result)
 
     diagnostic = str(exc_info.value).split(":\n", 1)[1]
@@ -258,7 +259,7 @@ def test_task_response_bounds_entire_error_including_task_and_context_identity()
         stderr="boom",
     )
 
-    with pytest.raises(RuntimeError) as exc_info:
+    with pytest.raises(TaskFailed) as exc_info:
         task_response(result)
 
     message = str(exc_info.value)

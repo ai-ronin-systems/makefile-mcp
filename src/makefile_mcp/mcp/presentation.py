@@ -14,6 +14,7 @@ from typing import Annotated, Any, Literal
 from pydantic import BaseModel, Field
 
 from makefile_mcp.app import Application
+from makefile_mcp.errors import TaskFailed
 from makefile_mcp.models import TaskDefinition, TaskResult, TaskStatus, VariableSpec, VariableType
 from makefile_mcp.syntax import SAFE_LITERAL_PATTERN, SAFE_PATH_PATTERN, parse_boolean_literal
 
@@ -72,8 +73,8 @@ def task_response(result: TaskResult) -> dict[str, Any]:
     """Return a successful task result or raise so MCP sets ``isError=true``.
 
     The protocol-level application keeps TaskResult for CLI/embedding callers. The MCP adapter
-    maps non-passing execution outcomes to ordinary Python exceptions because MCPServer converts
-    those into model-visible tool errors. Do not return an ``ok: false`` payload: MCP clients
+    maps non-passing execution outcomes to ``TaskFailed``, which the server adapter turns into a
+    model-visible tool error. Do not return an ``ok: false`` payload: MCP clients
     would treat that as a successful tool call.
     """
     if result.status == TaskStatus.PASSED:
@@ -102,7 +103,7 @@ def task_response(result: TaskResult) -> dict[str, Any]:
     # diagnostic, including caller-visible task/context identity, so an unusually long trusted
     # target or context cannot bypass the documented 8 KiB protocol budget. Full bounded task
     # output remains available to CLI/embedding callers.
-    raise RuntimeError(_bounded_utf8(summary, max_bytes=_MAX_MCP_ERROR_DIAGNOSTIC_BYTES))
+    raise TaskFailed(_bounded_utf8(summary, max_bytes=_MAX_MCP_ERROR_DIAGNOSTIC_BYTES))
 
 
 def _slug(value: str) -> str:

@@ -1,16 +1,19 @@
 """Thin MCP v2 SDK adapter with generic, direct, and combined presentations."""
 
 import inspect
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Iterator
+from contextlib import contextmanager
 from typing import Annotated, Any
 
 from mcp.server import MCPServer
 from mcp.server.elicitation import AcceptedElicitation, ElicitationResult
 from mcp.server.mcpserver import Context, Elicit, Resolve
+from mcp.server.mcpserver.exceptions import ToolError
 from mcp.types import ToolAnnotations
 from pydantic import BaseModel, Field
 
 from makefile_mcp.app import Application, build_application
+from makefile_mcp.errors import MakefileMcpError
 from makefile_mcp.execution import Approver
 from makefile_mcp.mcp.presentation import (
     DirectTool,
@@ -31,6 +34,15 @@ EXECUTE = ToolAnnotations(
 )
 
 
+@contextmanager
+def _visible_errors() -> Iterator[None]:
+    """Show expected Makefile MCP errors to the model; the SDK hides any other exception."""
+    try:
+        yield
+    except MakefileMcpError as exc:
+        raise ToolError(str(exc)) from exc
+
+
 class Approval(BaseModel):
     """Elicitation form shown to the human before a risky task runs."""
 
@@ -41,7 +53,8 @@ def _ask_approval(
     app: Application, ctx: Context, task: str, context: str
 ) -> Approval | Elicit[Approval] | None:
     """Decide whether to ask the human; ``None`` means the client cannot ask."""
-    definition = app.describe_task(task, context)
+    with _visible_errors():
+        definition = app.describe_task(task, context)
     if not app.needs_approval(definition):
         return Approval(approve=True)
     capabilities = ctx.client_capabilities
@@ -74,7 +87,8 @@ async def _run_with_progress(
     mode = "preview" if preview else "run"
     await ctx.report_progress(0.0, 1.0, f"Starting {mode}: {label}")
     try:
-        result = await operation()
+        with _visible_errors():
+            result = await operation()
     except Exception:
         await ctx.report_progress(1.0, 1.0, f"Failed {mode}: {label}")
         raise
@@ -148,19 +162,21 @@ def _register_generic_tools(server: MCPServer, app: Application) -> None:
 
     async def list_tasks(context: str = "root") -> dict[str, Any]:
         """List callable Make targets and semantic capability mappings."""
-        return response_success(
-            {
-                "exposure_mode": "governed" if app.governed else "auto",
-                "tasks": [task.model_dump(mode="json") for task in app.list_tasks(context)],
-                # Capabilities are context-scoped views of the same authorized catalog;
-                # never advertise a mapping whose target cannot run in this context.
-                "capabilities": app.list_capabilities(context),
-            }
-        )
+        with _visible_errors():
+            return response_success(
+                {
+                    "exposure_mode": "governed" if app.governed else "auto",
+                    "tasks": [task.model_dump(mode="json") for task in app.list_tasks(context)],
+                    # Capabilities are context-scoped views of the same authorized catalog;
+                    # never advertise a mapping whose target cannot run in this context.
+                    "capabilities": app.list_capabilities(context),
+                }
+            )
 
     async def describe_task(task: str, context: str = "root") -> dict[str, Any]:
         """Describe a callable Make target, variables, risk, and timeout."""
-        return response_success(app.describe_task(task, context))
+        with _visible_errors():
+            return response_success(app.describe_task(task, context))
 
     async def ask(ctx: Context, task: str, context: str) -> Approval | Elicit[Approval] | None:
         return _ask_approval(app, ctx, task, context)

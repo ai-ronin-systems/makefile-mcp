@@ -82,6 +82,9 @@ async def test_generic_run_reports_execution_failure_as_mcp_tool_error(app_for):
         failed = await client.call_tool("run_task", {"task": "fail", "context": "root"})
         assert failed.is_error is True
         assert failed.structured_content is None
+        # Agents need the diagnostics, not just a generic "Error executing tool".
+        assert "expected-failure" in failed.content[0].text
+        assert "Error 7" in failed.content[0].text
 
 
 @pytest.mark.asyncio
@@ -95,6 +98,7 @@ async def test_direct_run_reports_execution_failure_as_mcp_tool_error(app_for):
         failed = await client.call_tool("make_fail", {})
         assert failed.is_error is True
         assert failed.structured_content is None
+        assert "Error 9" in failed.content[0].text
 
 
 @pytest.mark.asyncio
@@ -111,6 +115,7 @@ async def test_generic_validation_failure_is_mcp_tool_error(app_for):
         )
         assert rejected.is_error is True
         assert rejected.structured_content is None
+        assert "NOPE" in rejected.content[0].text
 
 
 @pytest.mark.asyncio
