@@ -292,7 +292,7 @@ Optional. Appends one JSON line per run attempt, whatever its outcome:
 | `output_bytes`, `output_tail` | output size and the last 2000 characters, secrets masked |
 | `prev_sha256` | SHA-256 of the previous line, or `null` for the first record |
 
-Calls refused before their inputs are validated (unknown or unexposed task, undeclared or invalid input) are recorded with `approval: not_evaluated` and argument **names only**: secrecy is not known yet, so no value is written. A call refused because its context is busy, and a run cancelled by the client, are recorded too.
+Calls refused before their inputs are validated (unknown or unexposed task, undeclared or invalid input) are recorded with `approval: not_evaluated` and argument **names only**: secrecy is not known yet, so no value is written. A call refused because its context is busy, and a run cancelled by the client, are recorded too. Calls the MCP SDK rejects before Makefile MCP runs (an unknown tool, a direct tool argument that fails its schema) are not.
 
 Records form a hash chain across rotated files. `makefile-mcp doctor` verifies it and reports `audit.chain_broken` when a record was edited, removed, or inserted. The CLI and a server can write the same log safely: each record is chained and appended under a file lock.
 

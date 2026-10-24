@@ -27,6 +27,11 @@ All notable changes to Makefile MCP are documented here.
 
 ### Fixed
 
+- Over MCP, probes for unknown or unexposed targets and unknown contexts are audited.
+  The approval resolver used to fail them before the tool body ran, so nothing was recorded.
+- The approval prompt is shown only for calls that would run. A call with invalid or
+  undeclared inputs is refused without asking, so the agent cannot put text of its choosing
+  in front of the human.
 - The CLI and a server writing the same audit log no longer lose records on rotation: each
   record is appended under a file lock instead of through a per-process open file.
 - The audit log records every run attempt. Calls refused before validation (unknown or

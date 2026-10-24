@@ -17,6 +17,7 @@ from makefile_mcp.filesystem import (
     ensure_within_root,
     fingerprint,
 )
+from makefile_mcp.inputs import validate_variables
 from makefile_mcp.makefile import StaticMakeInspector
 from makefile_mcp.models import DoctorResult, MakefileMcpConfig, TaskDefinition, TaskResult
 from makefile_mcp.process import SubprocessRunner
@@ -103,6 +104,20 @@ class Application:
             self.executor.audit.refuse(task, context, variables or {}, reason=str(exc))
             raise
         return await self.executor.run(task, variables, context, preview=preview, approve=approve)
+
+    def inputs_valid(self, task: TaskDefinition, variables: dict[str, str]) -> bool:
+        """Return whether *variables* pass *task*'s input contract, without running anything."""
+        try:
+            validate_variables(
+                task,
+                variables,
+                root=self.root,
+                cwd=self.contexts.resolve(task.context).directory,
+                input_limit_bytes=self.config.defaults.input_limit_bytes,
+            )
+        except MakefileMcpError:
+            return False
+        return True
 
     def needs_approval(self, task: TaskDefinition) -> bool:
         """Return whether policy requires human approval before *task* runs."""

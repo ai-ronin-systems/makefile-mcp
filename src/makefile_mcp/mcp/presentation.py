@@ -259,7 +259,7 @@ def _signature(task: TaskDefinition) -> inspect.Signature:
     return inspect.Signature(parameters, return_annotation=dict[str, Any])
 
 
-def _wire_variables(arguments: dict[str, Any]) -> dict[str, str]:
+def wire_variables(arguments: dict[str, Any]) -> dict[str, str]:
     """Convert MCP scalar values back to the executor's text input contract."""
     variables: dict[str, str] = {}
     for name, value in arguments.items():
@@ -281,7 +281,7 @@ def _direct_callable(app: Application, task: TaskDefinition, tool_name: str) -> 
         return task_response(
             await app.run_task(
                 task.name,
-                _wire_variables(kwargs),
+                wire_variables(kwargs),
                 task.context,
                 preview=preview,
                 approve=approve,
