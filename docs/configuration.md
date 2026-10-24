@@ -180,7 +180,7 @@ The first character must be alphanumeric.
 
 ### `integer`
 
-Parsed as base-10 integer and normalized before execution.
+Plain ASCII digits with an optional leading `-` (`-?[0-9]+`), normalized before execution (`-007` becomes `-7`). Signs like `+1`, separators like `1_000`, and non-ASCII digits are rejected. There is no range check; bound the value in the recipe if it matters.
 
 ### `boolean`
 

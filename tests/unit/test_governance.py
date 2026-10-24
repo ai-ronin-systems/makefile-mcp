@@ -343,12 +343,12 @@ async def test_approval_prompt_shows_defaults_and_normalized_values(app_for, tmp
         create_server(app, McpPresentation.GENERIC), elicitation_callback=elicit
     ) as c:
         await c.call_tool(
-            "run_task", {"task": "deploy", "variables": {"N": "+0_0_1", "DIR": "staging"}}
+            "run_task", {"task": "deploy", "variables": {"N": "007", "DIR": "staging"}}
         )
 
     real = (tmp_path / "real-prod").resolve()
     assert prompts == [
-        f'Approve dangerous Make target \'deploy\' with DIR="{real}", ENV="production", N="1"?'
+        f'Approve dangerous Make target \'deploy\' with DIR="{real}", ENV="production", N="7"?'
     ]
 
 

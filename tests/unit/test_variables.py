@@ -102,3 +102,12 @@ def test_unpaired_unicode_surrogate_is_normalized_to_validation_error(tmp_path: 
     definition = task(MESSAGE=VariableSpec(type="string"))
     with pytest.raises(VariableValidationError, match="valid UTF-8"):
         validate(definition, {"MESSAGE": "\ud800"}, tmp_path)
+
+
+@pytest.mark.parametrize("raw", ["+1", "1_000", "\u0661\u0662", " 1", "0x10", ""])
+def test_integer_accepts_plain_ascii_digits_only(raw, tmp_path):
+    task = TaskDefinition(name="t", variables={"N": VariableSpec(type="integer")})
+
+    with pytest.raises(VariableValidationError, match="expected integer"):
+        validate_variables(task, {"N": raw}, root=tmp_path, cwd=tmp_path)
+    assert validate_variables(task, {"N": "-007"}, root=tmp_path, cwd=tmp_path) == {"N": "-7"}

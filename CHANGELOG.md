@@ -31,6 +31,8 @@ All notable changes to Makefile MCP are documented here.
 
 ### Fixed
 
+- `integer` inputs accept plain ASCII digits with an optional `-` only; `+1`, `1_000`, and
+  non-ASCII digits were accepted and silently normalized.
 - Hidden and unknown targets return the same message, so an agent cannot list the
   Makefile's unexposed targets by probing. The audit reason keeps the difference.
 - Make is resolved to an absolute path from the child `PATH`, ignoring relative entries such

@@ -10,6 +10,7 @@ from makefile_mcp.errors import VariableValidationError
 from makefile_mcp.filesystem import ensure_within_root
 from makefile_mcp.models import TaskDefinition, VariableSpec, VariableType
 from makefile_mcp.syntax import (
+    INTEGER_PATTERN,
     RESERVED_MAKE_VARIABLES,
     SAFE_LITERAL_PATTERN,
     SAFE_PATH_PATTERN,
@@ -46,10 +47,11 @@ def _convert_variable(spec: VariableSpec, raw: str, *, root: Path, cwd: Path) ->
     if spec.type == VariableType.TOKEN:
         return _safe_literal(raw, kind="token")
     if spec.type == VariableType.INTEGER:
-        try:
-            return str(int(raw, 10))
-        except ValueError as exc:
-            raise VariableValidationError(f"expected integer, got {raw!r}") from exc
+        # Plain ASCII digits only: int() alone also takes '+1_0' and non-ASCII digits, so the
+        # value a recipe receives could differ from anything a reviewer expects.
+        if not INTEGER_PATTERN.fullmatch(raw):
+            raise VariableValidationError(f"expected integer, got {raw!r}")
+        return str(int(raw, 10))
     if spec.type == VariableType.BOOLEAN:
         try:
             return "true" if parse_boolean_literal(raw) else "false"
