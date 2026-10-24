@@ -15,7 +15,14 @@ from pydantic import BaseModel, Field
 
 from makefile_mcp.app import Application
 from makefile_mcp.errors import TaskFailed
-from makefile_mcp.models import TaskDefinition, TaskResult, TaskStatus, VariableSpec, VariableType
+from makefile_mcp.models import (
+    AgentOutput,
+    TaskDefinition,
+    TaskResult,
+    TaskStatus,
+    VariableSpec,
+    VariableType,
+)
 from makefile_mcp.syntax import SAFE_LITERAL_PATTERN, SAFE_PATH_PATTERN, parse_boolean_literal
 
 _TOOL_COMPONENT = re.compile(r"[^A-Za-z0-9_.-]+")
@@ -25,6 +32,29 @@ _MAX_TOOL_NAME = 128
 _MAX_MCP_ERROR_DIAGNOSTIC_BYTES = 8192
 _MCP_DIAGNOSTIC_TRUNCATED = "\n[MCP diagnostic truncated]"
 _EXECUTOR_OUTPUT_TRUNCATED = "[task output truncated by executor]"
+# Characters of each stream kept by `agent_output: tail`, matching the audit log tail.
+AGENT_OUTPUT_TAIL_CHARS = 2000
+_TAIL_MARKER = "[earlier output withheld by agent_output policy]\n"
+_NONE_MARKER = "[output withheld by agent_output policy]"
+
+
+def shape_output(result: TaskResult, policy: AgentOutput) -> TaskResult:
+    """Narrow the recipe output an MCP result returns to the model."""
+    if policy == AgentOutput.FULL:
+        return result
+
+    def shape(stream: str) -> str:
+        if not stream:
+            return stream
+        if policy == AgentOutput.NONE:
+            return _NONE_MARKER
+        if len(stream) <= AGENT_OUTPUT_TAIL_CHARS:
+            return stream
+        return _TAIL_MARKER + stream[-AGENT_OUTPUT_TAIL_CHARS:]
+
+    return result.model_copy(
+        update={"stdout": shape(result.stdout), "stderr": shape(result.stderr)}
+    )
 
 
 def _bounded_utf8(text: str, *, max_bytes: int) -> str:
@@ -69,14 +99,17 @@ def response_success(data: Any) -> dict[str, Any]:
     return {"ok": True, "data": data}
 
 
-def task_response(result: TaskResult) -> dict[str, Any]:
+def task_response(result: TaskResult, policy: AgentOutput = AgentOutput.FULL) -> dict[str, Any]:
     """Return a successful task result or raise so MCP sets ``isError=true``.
+
+    *policy* is the task's ``agent_output``; it narrows output on success and failure alike.
 
     The protocol-level application keeps TaskResult for CLI/embedding callers. The MCP adapter
     maps non-passing execution outcomes to ``TaskFailed``, which the server adapter turns into a
     model-visible tool error. Do not return an ``ok: false`` payload: MCP clients
     would treat that as a successful tool call.
     """
+    result = shape_output(result, policy)
     if result.status == TaskStatus.PASSED:
         return response_success(result)
 
@@ -226,7 +259,7 @@ def _signature(task: TaskDefinition) -> inspect.Signature:
     return inspect.Signature(parameters, return_annotation=dict[str, Any])
 
 
-def _wire_variables(arguments: dict[str, Any]) -> dict[str, str]:
+def wire_variables(arguments: dict[str, Any]) -> dict[str, str]:
     """Convert MCP scalar values back to the executor's text input contract."""
     variables: dict[str, str] = {}
     for name, value in arguments.items():
@@ -248,11 +281,12 @@ def _direct_callable(app: Application, task: TaskDefinition, tool_name: str) -> 
         return task_response(
             await app.run_task(
                 task.name,
-                _wire_variables(kwargs),
+                wire_variables(kwargs),
                 task.context,
                 preview=preview,
                 approve=approve,
-            )
+            ),
+            task.agent_output,
         )
 
     # MCP SDK v2 derives inputSchema from inspect.signature(). A custom signature exposes the

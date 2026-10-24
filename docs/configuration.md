@@ -85,6 +85,7 @@ defaults:
 - `output_limit_bytes`: retained bound **per stream**, applied independently to stdout and stderr; minimum 4 KiB, maximum 16 MiB per stream.
 - `input_limit_bytes`: maximum encoded caller-input mapping and arbitrary-string JSON payload; 1 byte to 16 MiB.
 - `require_approval`: risk levels that need explicit human approval before running (or previewing); default `[dangerous]`, `[]` disables. Over MCP the server asks through elicitation and refuses when the client cannot ask; the CLI prompts on a TTY, accepts `--yes`, and refuses otherwise.
+- `agent_output`: how much recipe output MCP results return to the model: `full` (default), `tail` (the last 2000 characters of each stream), or `none` (status and exit code only). Applies to passing and failing runs. The CLI and the audit log are not affected. Recipe output is untrusted text for the model, so narrow it where the agent does not need it.
 
 ## `contexts`
 
@@ -123,6 +124,7 @@ Fields:
 - `risk`: optional `unknown | safe | write | dangerous`; omitted becomes `unknown`.
 - `timeout_seconds`: optional positive per-task timeout override.
 - `variables`: declared caller input contract.
+- `agent_output`: optional `full | tail | none` override of `defaults.agent_output`.
 
 A task entry never creates a Make target. The target must also be conservatively discovered in that context.
 
@@ -133,6 +135,7 @@ A task entry never creates a Make target. The target must also be conservatively
 | task timeout | `tasks.<name>.timeout_seconds` -> `defaults.timeout_seconds` |
 | task description | configured `description` -> discovered `##` description -> none |
 | task risk | configured `risk` -> `unknown` |
+| task agent output | `tasks.<name>.agent_output` -> `defaults.agent_output` -> `full` |
 | task contexts | configured `contexts` -> `[root]` |
 | environment inheritance | configured `environment.inherit` -> default `[PATH, HOME, USER]`; configured list replaces the default |
 | explicit environment values | `environment.allow` is applied after inherited values and therefore wins on duplicate keys |
@@ -272,7 +275,7 @@ GNU Make and Makefile MCP control variables are rejected. Environment configurat
 audit:
   path: .makefile-mcp/audit.jsonl   # relative to the repository root
   max_bytes: 10485760               # rotate after this size
-  backup_count: 3                   # rotated files kept
+  backup_count: 3                   # rotated files kept; 0 never rotates
 ```
 
 Optional. Appends one JSON line per run attempt, whatever its outcome:
@@ -287,10 +290,28 @@ Optional. Appends one JSON line per run attempt, whatever its outcome:
 | `reason` | why a call was refused, when it was |
 | `preview`, `exit_code`, `duration_ms` | how it ran |
 | `output_bytes`, `output_tail` | output size and the last 2000 characters, secrets masked |
+| `prev_sha256` | SHA-256 of the previous line, or `null` for the first record |
 
-Calls refused before their inputs are validated (unknown or unexposed task, undeclared or invalid input) are recorded with `approval: not_evaluated` and argument **names only**: secrecy is not known yet, so no value is written. A call refused because its context is busy, and a run cancelled by the client, are recorded too.
+Calls refused before their inputs are validated (unknown or unexposed task, undeclared or invalid input) are recorded with `approval: not_evaluated` and argument **names only**: secrecy is not known yet, so no value is written. A call refused because its context is busy, and a run cancelled by the client, are recorded too. Calls the MCP SDK rejects before Makefile MCP runs (an unknown tool, a direct tool argument that fails its schema) are not.
 
-The log is evidence, not a tamper-proof record: recipes run as the same user and could rewrite it. Ship it off the host if you need integrity. See [Threat model](threat-model.md#audit-log).
+Records form a hash chain across rotated files. `makefile-mcp doctor` verifies it and reports `audit.chain_broken` when a record was edited, removed, or inserted. The CLI and a server can write the same log safely: each record is chained and appended under a file lock.
+
+The chain makes tampering evident, not impossible. Recipes run as the same user, so they could rewrite the whole log and recompute every hash. Ship records, or at least the latest `prev_sha256`, off the host if the log must hold up. See [Threat model](threat-model.md#audit-log).
+
+## `pin`
+
+```yaml
+pin:
+  make_sources: true        # default when `pin` is present
+  paths: [scripts, config]  # extra files or directories recipes run
+```
+
+Optional. Freezes trusted files at startup, the same way `.makefile-mcp.yaml` is frozen. If a pinned file changes, appears, or disappears, every later call fails closed with a restart-required error, and run attempts are audited as refused.
+
+- `make_sources` pins each context's `Makefile` and the literal includes discovery tracks.
+- `paths` are repository-relative files or directories. Directories are walked without following symlinks, and their listings are pinned too, so added or renamed files count as changes. A path outside the repository is a startup error.
+
+Pinning is for agents that run trusted automation but must not change it. It detects changes through file metadata (size, timestamps including `ctime`, inode, symlink target), which a process running as the same user cannot reset. It does not cover files reached through dynamic includes, tools on `PATH`, or anything outside the pinned paths. See [Threat model](threat-model.md#the-write-access-rule).
 
 ## Exposure and presentation are not configuration keys
 

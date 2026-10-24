@@ -26,7 +26,9 @@ Design for a compromised agent: any text it reads can carry a prompt injection. 
 | Governed mode runs only allow-listed `(context, target)` pairs with typed, validated inputs. | Host or container privileges granted outside Makefile MCP. |
 | `dangerous` tasks need explicit human approval through the MCP client; no approval, no run. | An MCP client that auto-approves elicitation without a human. |
 | Every governed run attempt, refused, approved, or cancelled, can be written to an audit log, with secret inputs masked. | Secrets a recipe prints in ways that differ from the input value. |
-| The approval prompt shows the exact arguments; agent-supplied text cannot reshape it. | An agent that can also edit the `Makefile` or its scripts: editing a recipe is a shell. |
+| The approval prompt shows the exact arguments; agent-supplied text cannot reshape it. | An agent that can edit unpinned Make code or scripts: editing a recipe is a shell. |
+| With `pin`, any edit to the Makefile, its includes, or listed scripts stops the server until a human restarts it. | Prompt injection in output the agent does read; `agent_output: tail` or `none` narrows it. |
+| Audit records are hash-chained; `doctor` reports edits. A CI test replays a hijacked agent. | A same-user process rewriting the whole log and its chain. |
 
 Details: [threat model](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/threat-model.md), [SECURITY.md](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/SECURITY.md), and [security model](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/security.md).
 
@@ -133,6 +135,9 @@ capabilities:
 
 audit:
   path: .makefile-mcp/audit.jsonl
+
+pin:
+  paths: [scripts]       # freeze Make code and scripts the agent must not change
 ```
 
 Only enabled `(context, target)` pairs are callable. `dangerous` tasks additionally need human approval (`defaults.require_approval`), and `audit` writes one JSON line per call. See [Governed mode](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/governed_mode.md), [Configuration](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/configuration.md), and [Contexts and capabilities](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/contexts_and_capabilities.md).

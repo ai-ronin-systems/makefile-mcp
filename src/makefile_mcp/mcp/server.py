@@ -21,6 +21,7 @@ from makefile_mcp.mcp.presentation import (
     build_direct_tools,
     response_success,
     task_response,
+    wire_variables,
 )
 from makefile_mcp.models import TaskDefinition
 from makefile_mcp.version import __version__
@@ -92,10 +93,18 @@ def _ask_approval(
     preview: bool,
 ) -> Approval | Elicit[Approval] | None:
     """Decide whether to ask the human; ``None`` means the client cannot ask."""
-    with _visible_errors():
+    try:
         definition = app.describe_task(task, context)
+    except MakefileMcpError:
+        # Let the tool body run so the executor refuses the call and audits the attempt.
+        # Raising here would end the call before anything is recorded.
+        return Approval(approve=False)
     if not app.needs_approval(definition):
         return Approval(approve=True)
+    if not app.inputs_valid(definition, wire_variables(arguments)):
+        # Never put a call that will be refused in front of the human: its values are text the
+        # agent chose. The executor validates first, then refuses and audits the call.
+        return Approval(approve=False)
     capabilities = ctx.client_capabilities
     if capabilities is None or capabilities.elicitation is None:
         return None
@@ -205,9 +214,9 @@ async def _generic_task_call(
     preview: bool,
     approve: Approver | None,
 ) -> dict[str, Any]:
-    return task_response(
-        await app.run_task(task, variables, context, preview=preview, approve=approve)
-    )
+    result = await app.run_task(task, variables, context, preview=preview, approve=approve)
+    # Looked up after the run, so refusals are raised and audited by run_task first.
+    return task_response(result, app.describe_task(task, context).agent_output)
 
 
 def _register_generic_tools(server: MCPServer, app: Application) -> None:

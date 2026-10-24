@@ -6,6 +6,18 @@ All notable changes to Makefile MCP are documented here.
 
 ### Added
 
+- `pin` policy: freeze each context's Makefile, tracked includes, and listed scripts at
+  startup. Any change makes every later call fail closed until restart, and the refused
+  attempts are audited. This closes the gap where an agent that can edit Make code turns an
+  exposed target into a shell.
+- Audit records are hash-chained (`prev_sha256`), across rotated files, and
+  `makefile-mcp doctor` reports an edited, removed, or inserted record.
+- `agent_output: full | tail | none`, per task or in `defaults`: how much recipe output MCP
+  results return to the model. Output is untrusted text for the model; `tail` and `none`
+  shrink the prompt-injection surface and the context spent on logs.
+- A CI test replays a hijacked agent's tool calls over a real MCP session, and
+  `evals/prompt_injection.py` runs a live Claude agent against poisoned test output and
+  reports what it attempted and what the server allowed.
 - `docs/threat-model.md`: why agents should not get a shell, threats and controls with the
   tests that prove them, the write-access rule, the policy and audit log, and what the server
   does and does not guarantee.
@@ -18,6 +30,13 @@ All notable changes to Makefile MCP are documented here.
 
 ### Fixed
 
+- Over MCP, probes for unknown or unexposed targets and unknown contexts are audited.
+  The approval resolver used to fail them before the tool body ran, so nothing was recorded.
+- The approval prompt is shown only for calls that would run. A call with invalid or
+  undeclared inputs is refused without asking, so the agent cannot put text of its choosing
+  in front of the human.
+- The CLI and a server writing the same audit log no longer lose records on rotation: each
+  record is appended under a file lock instead of through a per-process open file.
 - The audit log records every run attempt. Calls refused before validation (unknown or
   unexposed task, undeclared or invalid input) are logged with argument names only, and busy
   or cancelled runs are logged with status `refused` or `cancelled`.

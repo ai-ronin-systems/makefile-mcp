@@ -70,7 +70,7 @@ Runs one callable target through the common execution path.
 makefile-mcp doctor [--json]
 ```
 
-Runs read-only diagnostics over runtime availability, contexts, conservative discovery, configured exposure, capabilities, and operating assumptions. It does not execute task recipes.
+Runs read-only diagnostics over runtime availability, contexts, conservative discovery, configured exposure, capabilities, the audit log hash chain, and operating assumptions. It does not execute task recipes.
 
 A clean result exits `0`; a diagnostic result containing an error exits `1`.
 

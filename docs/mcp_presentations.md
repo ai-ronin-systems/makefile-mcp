@@ -166,6 +166,10 @@ Only these expected Makefile MCP errors carry their message to the model. Any ot
 
 CLI/direct Python embedding callers retain the normalized `TaskResult` model for completed executions; MCP performs this failure mapping only at the adapter boundary.
 
+## Output returned to the model
+
+Passing and failing task results carry recipe stdout and stderr, bounded as described above. `agent_output` narrows that per task: `tail` keeps the last 2000 characters of each stream, and `none` replaces each non-empty stream with a marker. See [Configuration](configuration.md#defaults). This is a presentation choice: the CLI, embedding callers, and the audit log keep their normal output.
+
 ## Human approval
 
 Tasks whose risk is listed in `defaults.require_approval` (default `[dangerous]`) need a human to approve each run, preview included. Both presentations ask through MCP elicitation, using the SDK's resolver mechanism: on 2026-07-28 and later protocol versions this travels as an input-required round trip, and on older versions as a server request. The approval parameter is filled by the server and never appears in a tool's input schema. If the client did not declare elicitation support, or the human declines, the call fails as a tool error and nothing runs.
