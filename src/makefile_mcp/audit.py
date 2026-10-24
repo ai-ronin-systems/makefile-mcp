@@ -37,8 +37,13 @@ class AuditLog:
         approval: str,
         result: TaskResult | None = None,
         preview: bool = False,
+        status: str = "refused",
+        reason: str | None = None,
     ) -> None:
-        """Append one invocation record with secret values masked."""
+        """Append one invocation record with secret values masked.
+
+        Without a *result*, the record carries *status* (``refused`` or ``cancelled``).
+        """
         if self._handler is None:
             return
         secret_names = {name for name, spec in task.variables.items() if spec.secret}
@@ -56,10 +61,37 @@ class AuditLog:
             "risk": task.risk.value,
             "approval": approval,
             "preview": preview,
-            "status": result.status.value if result else "refused",
+            "status": result.status.value if result else status,
             "exit_code": result.exit_code if result else None,
             "duration_ms": result.duration_ms if result else 0,
             "output_bytes": len(output.encode("utf-8")),
             "output_tail": output[-TAIL_CHARS:],
         }
+        if reason is not None:
+            entry["reason"] = reason
+        self._write(entry)
+
+    def refuse(self, task: str, context: str, arguments: object, *, reason: str) -> None:
+        """Record a call refused before its task contract was known or its inputs were valid.
+
+        Secrecy is unknown at this point, so only argument names are kept, never values.
+        """
+        if self._handler is None:
+            return
+        names = sorted(str(name) for name in arguments) if isinstance(arguments, dict) else []
+        self._write(
+            {
+                "timestamp": datetime.now(UTC).isoformat(),
+                "task": task,
+                "context": context,
+                "arguments": dict.fromkeys(names, MASK),
+                "risk": None,
+                "approval": "not_evaluated",
+                "status": "refused",
+                "reason": reason,
+            }
+        )
+
+    def _write(self, entry: dict[str, object]) -> None:
+        assert self._handler is not None
         self._handler.handle(logging.makeLogRecord({"msg": json.dumps(entry, sort_keys=True)}))

@@ -5,7 +5,7 @@ import pytest
 from mcp import Client, types
 
 from makefile_mcp.app import build_application
-from makefile_mcp.errors import ApprovalRequired, TaskNotRunnable
+from makefile_mcp.errors import ApprovalRequired, MakefileMcpError, TaskBusyError, TaskNotRunnable
 from makefile_mcp.mcp.presentation import McpPresentation, build_direct_tools
 from makefile_mcp.mcp.server import create_server
 
@@ -75,6 +75,50 @@ def test_dangerous_task_requires_approval_and_is_audited(app_for, tmp_path):
     assert records[-1]["risk"] == "dangerous"
     assert records[-1]["output_bytes"] > 0
     assert "s3cr3t" not in (tmp_path / "logs/audit.jsonl").read_text(encoding="utf-8")
+
+
+def test_refused_calls_are_audited_without_argument_values(app_for, tmp_path):
+    app = app_for(DEPLOY_MAKEFILE + "hidden:\n\t@true\n", DANGEROUS)
+
+    for task, variables in [
+        ("missing", {"X": "s3cr3t"}),
+        ("hidden", {}),
+        ("deploy", {"TOKN": "s3cr3t"}),
+    ]:
+        with pytest.raises(MakefileMcpError):
+            asyncio.run(app.run_task(task, variables, approve=_yes))
+
+    records = _audit(tmp_path)
+    assert [(r["task"], r["status"], r["approval"]) for r in records] == [
+        ("missing", "refused", "not_evaluated"),
+        ("hidden", "refused", "not_evaluated"),
+        ("deploy", "refused", "not_evaluated"),
+    ]
+    assert "not exposed" in records[1]["reason"]
+    assert records[2]["arguments"] == {"TOKN": "***"}
+    assert "s3cr3t" not in (tmp_path / "logs/audit.jsonl").read_text(encoding="utf-8")
+
+
+def test_busy_and_cancelled_runs_are_audited(app_for, tmp_path):
+    app = app_for(
+        ".PHONY: slow\nslow:\n\t@sleep 30\n",
+        "schema_version: 1\naudit:\n  path: logs/audit.jsonl\ntasks:\n  slow: {}\n",
+    )
+
+    async def scenario():
+        first = asyncio.create_task(app.run_task("slow"))
+        await asyncio.sleep(0.5)
+        with pytest.raises(TaskBusyError):
+            await app.run_task("slow")
+        first.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await first
+
+    asyncio.run(scenario())
+
+    records = _audit(tmp_path)
+    assert [r["status"] for r in records] == ["refused", "cancelled"]
+    assert "active task" in records[0]["reason"]
 
 
 def test_require_approval_is_configurable(app_for):

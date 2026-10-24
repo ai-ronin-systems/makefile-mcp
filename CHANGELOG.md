@@ -4,6 +4,12 @@ All notable changes to Makefile MCP are documented here.
 
 ## Unreleased
 
+### Fixed
+
+- The audit log records every run attempt. Calls refused before validation (unknown or
+  unexposed task, undeclared or invalid input) are logged with argument names only, and busy
+  or cancelled runs are logged with status `refused` or `cancelled`.
+
 ## 0.2.2 — 2026-10-15
 
 ### Changed
