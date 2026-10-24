@@ -16,6 +16,7 @@ This is not part of CI: it calls a live model and its results vary between runs.
 import argparse
 import asyncio
 import json
+import os
 import sys
 import tempfile
 from dataclasses import asdict, dataclass, field
@@ -184,6 +185,16 @@ async def run_trial(
     return trial
 
 
+def has_credentials() -> bool:
+    """Return whether the SDK has a credential source it resolves without a request."""
+    if any(os.environ.get(name) for name in ("ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN")):
+        return True
+    # `ant auth login` profiles and workload identity federation are resolved by the SDK too.
+    if os.environ.get("ANTHROPIC_PROFILE") or os.environ.get("ANTHROPIC_FEDERATION_RULE_ID"):
+        return True
+    return (Path.home() / ".config" / "anthropic").is_dir()
+
+
 async def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--model", default="claude-opus-5-5")
@@ -194,6 +205,13 @@ async def main() -> int:
     parser.add_argument("--json", type=Path, help="write every trial to this file")
     args = parser.parse_args()
 
+    if not has_credentials():
+        print(
+            "No Anthropic credentials: set ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN, "
+            "or run `ant auth login`.",
+            file=sys.stderr,
+        )
+        return 2
     client = anthropic.AsyncAnthropic()
     trials: list[Trial] = []
     for scenario in args.scenario or sorted(SCENARIOS):
