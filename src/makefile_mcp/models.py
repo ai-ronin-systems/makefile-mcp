@@ -234,6 +234,15 @@ class AuditConfig(StrictModel):
     backup_count: int = Field(default=3, ge=0)
 
 
+class PinConfig(StrictModel):
+    """Trusted files frozen at startup: any change makes every later call fail closed."""
+
+    # Each context's Makefile and the literal includes discovery tracks.
+    make_sources: bool = True
+    # Extra repository files or directories that recipes run, such as scripts/.
+    paths: list[str] = Field(default_factory=list)
+
+
 class ContextConfig(StrictModel):
     """Relative repository directory defining one governed execution context."""
 
@@ -312,6 +321,7 @@ class MakefileMcpConfig(StrictModel):
     capabilities: dict[str, str] = Field(default_factory=dict)
     environment: EnvironmentConfig = Field(default_factory=EnvironmentConfig)
     audit: AuditConfig | None = None
+    pin: PinConfig | None = None
 
     @field_validator("schema_version")
     @classmethod

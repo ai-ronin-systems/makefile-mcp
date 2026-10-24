@@ -292,6 +292,21 @@ Calls refused before their inputs are validated (unknown or unexposed task, unde
 
 The log is evidence, not a tamper-proof record: recipes run as the same user and could rewrite it. Ship it off the host if you need integrity. See [Threat model](threat-model.md#audit-log).
 
+## `pin`
+
+```yaml
+pin:
+  make_sources: true        # default when `pin` is present
+  paths: [scripts, config]  # extra files or directories recipes run
+```
+
+Optional. Freezes trusted files at startup, the same way `.makefile-mcp.yaml` is frozen. If a pinned file changes, appears, or disappears, every later call fails closed with a restart-required error, and run attempts are audited as refused.
+
+- `make_sources` pins each context's `Makefile` and the literal includes discovery tracks.
+- `paths` are repository-relative files or directories. Directories are walked without following symlinks, and their listings are pinned too, so added or renamed files count as changes. A path outside the repository is a startup error.
+
+Pinning is for agents that run trusted automation but must not change it. It detects changes through file metadata (size, timestamps including `ctime`, inode, symlink target), which a process running as the same user cannot reset. It does not cover files reached through dynamic includes, tools on `PATH`, or anything outside the pinned paths. See [Threat model](threat-model.md#the-write-access-rule).
+
 ## Exposure and presentation are not configuration keys
 
 Exposure mode is selected only by `.makefile-mcp.yaml` presence:
