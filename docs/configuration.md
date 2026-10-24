@@ -85,6 +85,7 @@ defaults:
 - `output_limit_bytes`: retained bound **per stream**, applied independently to stdout and stderr; minimum 4 KiB, maximum 16 MiB per stream.
 - `input_limit_bytes`: maximum encoded caller-input mapping and arbitrary-string JSON payload; 1 byte to 16 MiB.
 - `require_approval`: risk levels that need explicit human approval before running (or previewing); default `[dangerous]`, `[]` disables. Over MCP the server asks through elicitation and refuses when the client cannot ask; the CLI prompts on a TTY, accepts `--yes`, and refuses otherwise.
+- `agent_output`: how much recipe output MCP results return to the model: `full` (default), `tail` (the last 2000 characters of each stream), or `none` (status and exit code only). Applies to passing and failing runs. The CLI and the audit log are not affected. Recipe output is untrusted text for the model, so narrow it where the agent does not need it.
 
 ## `contexts`
 
@@ -123,6 +124,7 @@ Fields:
 - `risk`: optional `unknown | safe | write | dangerous`; omitted becomes `unknown`.
 - `timeout_seconds`: optional positive per-task timeout override.
 - `variables`: declared caller input contract.
+- `agent_output`: optional `full | tail | none` override of `defaults.agent_output`.
 
 A task entry never creates a Make target. The target must also be conservatively discovered in that context.
 
@@ -133,6 +135,7 @@ A task entry never creates a Make target. The target must also be conservatively
 | task timeout | `tasks.<name>.timeout_seconds` -> `defaults.timeout_seconds` |
 | task description | configured `description` -> discovered `##` description -> none |
 | task risk | configured `risk` -> `unknown` |
+| task agent output | `tasks.<name>.agent_output` -> `defaults.agent_output` -> `full` |
 | task contexts | configured `contexts` -> `[root]` |
 | environment inheritance | configured `environment.inherit` -> default `[PATH, HOME, USER]`; configured list replaces the default |
 | explicit environment values | `environment.allow` is applied after inherited values and therefore wins on duplicate keys |

@@ -56,6 +56,16 @@ class TaskStatus(StrEnum):
     TIMEOUT = "timeout"
 
 
+class AgentOutput(StrEnum):
+    """How much recipe output an MCP result carries back to the model."""
+
+    FULL = "full"
+    # Only the end of each stream, where test summaries and errors usually are.
+    TAIL = "tail"
+    # Status and exit code only; the evidence lives in files or the audit log.
+    NONE = "none"
+
+
 class DoctorSeverity(StrEnum):
     """Severity level for one read-only doctor finding."""
 
@@ -154,6 +164,7 @@ class TaskDefinition(StrictModel):
     variables: dict[str, VariableSpec] = Field(default_factory=dict)
     # Auto mode lists every discovered target but runs only conventional safe ones.
     runnable: bool = True
+    agent_output: AgentOutput = AgentOutput.FULL
 
     @field_validator("variables")
     @classmethod
@@ -224,6 +235,8 @@ class DefaultsConfig(StrictModel):
     input_limit_bytes: int = Field(default=1_048_576, ge=1, le=16_777_216)
     # Tasks at these risk levels run only after explicit human approval.
     require_approval: list[TaskRisk] = Field(default_factory=lambda: [TaskRisk.DANGEROUS])
+    # Recipe output is untrusted text for the model; narrow it where the agent needs less.
+    agent_output: AgentOutput = AgentOutput.FULL
 
 
 class AuditConfig(StrictModel):
@@ -258,6 +271,7 @@ class TaskConfig(StrictModel):
     risk: TaskRisk | None = None
     timeout_seconds: int | None = Field(default=None, gt=0)
     variables: dict[str, VariableSpec] = Field(default_factory=dict)
+    agent_output: AgentOutput | None = None
 
     @field_validator("contexts")
     @classmethod

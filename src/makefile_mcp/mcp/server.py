@@ -205,9 +205,9 @@ async def _generic_task_call(
     preview: bool,
     approve: Approver | None,
 ) -> dict[str, Any]:
-    return task_response(
-        await app.run_task(task, variables, context, preview=preview, approve=approve)
-    )
+    result = await app.run_task(task, variables, context, preview=preview, approve=approve)
+    # Looked up after the run, so refusals are raised and audited by run_task first.
+    return task_response(result, app.describe_task(task, context).agent_output)
 
 
 def _register_generic_tools(server: MCPServer, app: Application) -> None:

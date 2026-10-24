@@ -97,6 +97,7 @@ class Catalog:
                     risk=TaskRisk.UNKNOWN,
                     timeout_seconds=self.config.defaults.timeout_seconds,
                     runnable=self.legacy_auto_run or name in AUTO_RUN_TARGETS,
+                    agent_output=self.config.defaults.agent_output,
                 )
                 continue
 
@@ -118,6 +119,7 @@ class Catalog:
                 risk=task_config.risk or TaskRisk.UNKNOWN,
                 timeout_seconds=timeout,
                 variables=task_config.variables,
+                agent_output=task_config.agent_output or self.config.defaults.agent_output,
             )
 
         snapshot = CatalogSnapshot(
