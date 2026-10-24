@@ -114,7 +114,13 @@ def validate_variables(
         if name in RESERVED_MAKE_VARIABLES:
             raise VariableValidationError(f"reserved declared variable name: {name}")
         if name in supplied:
-            result[name] = _convert_variable(spec, supplied[name], root=root, cwd=cwd)
+            try:
+                result[name] = _convert_variable(spec, supplied[name], root=root, cwd=cwd)
+            except VariableValidationError as exc:
+                # Messages quote the rejected value; a secret's value must never reach the
+                # caller, the audit log, or any other error text.
+                detail = f"invalid {spec.type} value" if spec.secret else str(exc)
+                raise VariableValidationError(f"{name}: {detail}") from None
         elif spec.default is not None:
             result[name] = _convert_variable(spec, str(spec.default), root=root, cwd=cwd)
         elif spec.required:

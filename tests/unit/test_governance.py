@@ -299,3 +299,23 @@ def test_audit_tail_reader_returns_a_whole_line_of_any_length(tmp_path):
 
     assert _last_line(log) == long_line
     assert _last_line(tmp_path / "missing.jsonl") is None
+
+
+def test_secret_values_never_reach_errors_or_the_audit_log(app_for, tmp_path):
+    app = app_for(
+        ".PHONY: login\nlogin:\n\t@cat $(MAKEFILE_MCP_INPUT); echo; echo $(PIN)\n",
+        "schema_version: 1\naudit:\n  path: logs/audit.jsonl\ntasks:\n  login:\n"
+        "    variables:\n      PIN:\n        type: integer\n        secret: true\n"
+        "      SHORT:\n        type: string\n        secret: true\n"
+        "      LONG:\n        type: string\n        secret: true\n",
+    )
+    with pytest.raises(MakefileMcpError) as refused:
+        asyncio.run(app.run_task("login", {"PIN": "hunter2"}))
+    assert "hunter2" not in str(refused.value) and "PIN" in str(refused.value)
+
+    # The JSON payload escapes the quote; a shorter secret is a prefix of a longer one.
+    asyncio.run(app.run_task("login", {"PIN": "4242", "SHORT": "abc", "LONG": 'abc-TAIL"q'}))
+
+    log = (tmp_path / "logs/audit.jsonl").read_text(encoding="utf-8")
+    for leaked in ("hunter2", "4242", "TAIL", "abc"):
+        assert leaked not in log, leaked
