@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from makefile_mcp.app import Application, build_application
 from makefile_mcp.errors import MakefileMcpError
+from makefile_mcp.execution import describe_call
 from makefile_mcp.mcp import McpPresentation
 from makefile_mcp.models import TaskDefinition
 from makefile_mcp.version import __version__
@@ -165,8 +166,8 @@ def run_command(
 ) -> None:
     """Execute or preview one callable task with optional declared ``KEY=VALUE`` inputs."""
 
-    async def approve(definition: TaskDefinition) -> bool:
-        return yes or typer.confirm(f"Run {definition.risk} task {definition.name!r}?")
+    async def approve(definition: TaskDefinition, arguments: dict[str, str]) -> bool:
+        return yes or typer.confirm(describe_call(definition, arguments, preview=preview))
 
     variables: dict[str, str] = {}
     for item in assignments or []:

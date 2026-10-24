@@ -1,6 +1,7 @@
 """Orchestrate one authorized Make task through the bounded process boundary."""
 
 import asyncio
+import json
 import os
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
@@ -27,8 +28,37 @@ from makefile_mcp.models import (
 from makefile_mcp.process import SubprocessRunner
 from makefile_mcp.syntax import MAKEFILE_MCP_INPUT_VARIABLE
 
-# Asks a human whether one risky task may run. ``None`` means nobody can be asked.
-Approver = Callable[[TaskDefinition], Awaitable[bool]]
+# Asks a human whether one risky task may run, given its validated arguments. ``None`` means
+# nobody can be asked.
+Approver = Callable[[TaskDefinition, dict[str, str]], Awaitable[bool]]
+
+# Longer argument values are clipped in the approval question.
+APPROVAL_VALUE_CHARS = 200
+
+
+def describe_call(task: TaskDefinition, arguments: dict[str, str], *, preview: bool) -> str:
+    """Phrase the approval question for the exact call that would run.
+
+    *arguments* are validated values: defaults filled in, paths resolved, numbers normalized.
+    Secrets are masked. Values come from the agent, so they are JSON-quoted: a crafted value
+    cannot close its quotes, add lines, or hide characters such as bidirectional overrides.
+    """
+    label = task.name if task.context == "root" else f"{task.context}:{task.name}"
+    shown = []
+    for name, value in sorted(arguments.items()):
+        spec = task.variables.get(name)
+        if spec is not None and spec.secret:
+            shown.append(f"{name}=***")
+            continue
+        if len(value) > APPROVAL_VALUE_CHARS:
+            value = value[:APPROVAL_VALUE_CHARS] + "..."
+        shown.append(f"{name}={json.dumps(value)}")
+    question = f"Approve {task.risk} Make target {label!r}"
+    if preview:
+        question += " (preview)"
+    if shown:
+        question += " with " + ", ".join(shown)
+    return question + "?"
 
 
 def build_make_argv(
@@ -98,13 +128,15 @@ class TaskExecutor:
         """Return whether policy requires a human to approve this task before it runs."""
         return task.risk in self.config.defaults.require_approval
 
-    async def _approval(self, task: TaskDefinition, approve: Approver | None) -> str:
+    async def _approval(
+        self, task: TaskDefinition, validated: dict[str, str], approve: Approver | None
+    ) -> str:
         """Return the approval outcome for one task: not_required, approved, denied, unavailable."""
         if not self.needs_approval(task):
             return "not_required"
         if approve is None:
             return "unavailable"
-        return "approved" if await approve(task) else "denied"
+        return "approved" if await approve(task, validated) else "denied"
 
     async def run(
         self,
@@ -138,7 +170,7 @@ class TaskExecutor:
             # Probing for hidden targets or malformed inputs is the signal an operator wants.
             self.audit.refuse(task_name, context, variables or {}, reason=str(exc))
             raise
-        approval = await self._approval(task, approve)
+        approval = await self._approval(task, validated, approve)
         if approval in {"denied", "unavailable"}:
             self.audit.record(task, validated, approval=approval, preview=preview)
             raise ApprovalRequired(

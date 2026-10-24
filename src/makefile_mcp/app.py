@@ -105,10 +105,12 @@ class Application:
             raise
         return await self.executor.run(task, variables, context, preview=preview, approve=approve)
 
-    def inputs_valid(self, task: TaskDefinition, variables: dict[str, str]) -> bool:
-        """Return whether *variables* pass *task*'s input contract, without running anything."""
+    def validated_inputs(
+        self, task: TaskDefinition, variables: dict[str, str]
+    ) -> dict[str, str] | None:
+        """Return *variables* as they would run, or ``None`` if they break the contract."""
         try:
-            validate_variables(
+            return validate_variables(
                 task,
                 variables,
                 root=self.root,
@@ -116,8 +118,7 @@ class Application:
                 input_limit_bytes=self.config.defaults.input_limit_bytes,
             )
         except MakefileMcpError:
-            return False
-        return True
+            return None
 
     def needs_approval(self, task: TaskDefinition) -> bool:
         """Return whether policy requires human approval before *task* runs."""

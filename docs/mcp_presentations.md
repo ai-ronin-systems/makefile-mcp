@@ -177,10 +177,10 @@ Tasks whose risk is listed in `defaults.require_approval` (default `[dangerous]`
 The prompt names the exact call, so the human approves arguments and not just a target name:
 
 ```text
-Approve dangerous Make target 'deploy' with ENV='production', NOTE='ok\nApprove: safe', TOKEN=***?
+Approve dangerous Make target 'deploy' with ENV="production", NOTE="ok\nApprove: safe", TOKEN=***?
 ```
 
-`secret: true` values are masked. Other values are shown as quoted, escaped literals and clipped to 200 characters, so a value the agent crafted cannot add lines to the dialog or pose as part of the question.
+The prompt shows the call as it would run: defaults filled in, integers and booleans normalized, paths resolved through symlinks. `secret: true` values are masked. Other values are JSON-quoted and clipped to 200 characters, so a value the agent crafted cannot close its quotes, add lines, or hide characters such as bidirectional overrides. The CLI asks the same question before a risky task runs.
 
 In auto mode, targets other than `test`, `lint`, `check`, and `fmt` are listed by `list_tasks` with `runnable: false` and get no direct tool.
 

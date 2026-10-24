@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field
 
 from makefile_mcp.app import Application, build_application
 from makefile_mcp.errors import MakefileMcpError
-from makefile_mcp.execution import Approver
+from makefile_mcp.execution import Approver, describe_call
 from makefile_mcp.mcp.presentation import (
     MAX_MCP_ERROR_BYTES,
     DirectTool,
@@ -27,9 +27,6 @@ from makefile_mcp.mcp.presentation import (
 )
 from makefile_mcp.models import TaskDefinition
 from makefile_mcp.version import __version__
-
-# Longer argument values are clipped in the approval prompt.
-APPROVAL_VALUE_CHARS = 200
 
 READ_ONLY = ToolAnnotations(read_only_hint=True, open_world_hint=False)
 EXECUTE = ToolAnnotations(
@@ -56,36 +53,6 @@ class Approval(BaseModel):
     approve: bool = Field(description="Allow this Make target to run now?")
 
 
-def _approval_message(
-    definition: TaskDefinition, arguments: dict[str, Any], *, preview: bool
-) -> str:
-    """Describe the exact call to the human, with secrets masked and values escaped.
-
-    Values come from the agent, so ``repr`` keeps a crafted string from faking extra lines.
-    """
-    label = definition.name
-    if definition.context != "root":
-        label = f"{definition.context}:{label}"
-    shown = []
-    for name, value in sorted(arguments.items()):
-        if value is None:
-            continue
-        spec = definition.variables.get(name)
-        if spec is not None and spec.secret:
-            shown.append(f"{name}=***")
-            continue
-        text = value if isinstance(value, str) else str(value)
-        if len(text) > APPROVAL_VALUE_CHARS:
-            text = text[:APPROVAL_VALUE_CHARS] + "..."
-        shown.append(f"{name}={text!r}")
-    message = f"Approve {definition.risk} Make target {label!r}"
-    if preview:
-        message += " (preview)"
-    if shown:
-        message += " with " + ", ".join(shown)
-    return message + "?"
-
-
 def _ask_approval(
     app: Application,
     ctx: Context,
@@ -104,14 +71,16 @@ def _ask_approval(
         return Approval(approve=False)
     if not app.needs_approval(definition):
         return Approval(approve=True)
-    if not app.inputs_valid(definition, wire_variables(arguments)):
+    validated = app.validated_inputs(definition, wire_variables(arguments))
+    if validated is None:
         # Never put a call that will be refused in front of the human: its values are text the
         # agent chose. The executor validates first, then refuses and audits the call.
         return Approval(approve=False)
     capabilities = ctx.client_capabilities
     if capabilities is None or capabilities.elicitation is None:
         return None
-    return Elicit(_approval_message(definition, arguments, preview=preview), Approval)
+    # The human approves the call as it would run, defaults and resolved paths included.
+    return Elicit(describe_call(definition, validated, preview=preview), Approval)
 
 
 def _approver(outcome: ElicitationResult[Approval]) -> Approver | None:
@@ -120,7 +89,7 @@ def _approver(outcome: ElicitationResult[Approval]) -> Approver | None:
         return None
     granted = isinstance(outcome, AcceptedElicitation) and outcome.data.approve
 
-    async def approve(task: TaskDefinition) -> bool:
+    async def approve(task: TaskDefinition, arguments: dict[str, str]) -> bool:
         return granted
 
     return approve

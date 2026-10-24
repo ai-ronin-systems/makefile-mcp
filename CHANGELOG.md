@@ -24,9 +24,10 @@ All notable changes to Makefile MCP are documented here.
 
 ### Changed
 
-- The approval prompt shows the call's arguments, so a human approves `deploy` with
-  `ENV='production'` rather than a bare target name. Secret values are masked; other values
-  are escaped and clipped so agent-supplied text cannot reshape the prompt.
+- The approval prompt shows the call as it would run, so a human approves `deploy` with
+  `ENV="production"` rather than a bare target name: defaults filled in, values normalized,
+  paths resolved. Secret values are masked; other values are JSON-quoted and clipped so
+  agent-supplied text cannot reshape the prompt. The CLI asks the same question.
 
 ### Fixed
 

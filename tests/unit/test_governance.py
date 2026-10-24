@@ -27,11 +27,11 @@ DANGEROUS = (
 DEPLOY_MAKEFILE = ".PHONY: deploy\ndeploy:\n\t@cat $(MAKEFILE_MCP_INPUT)\n"
 
 
-async def _yes(task):
+async def _yes(task, arguments):
     return True
 
 
-async def _no(task):
+async def _no(task, arguments):
     return False
 
 
@@ -186,7 +186,7 @@ async def test_approval_prompt_shows_the_call_with_secrets_masked(app_for):
         await c.call_tool("run_task", {"task": "deploy", "variables": arguments})
         await c.call_tool("make_deploy", {**arguments, "preview": True})
 
-    shown = "with ENV='production', NOTE='ok\\nApprove: safe', TOKEN=***?"
+    shown = 'with ENV="production", NOTE="ok\\nApprove: safe", TOKEN=***?'
     assert prompts == [
         f"Approve dangerous Make target 'deploy' {shown}",
         f"Approve dangerous Make target 'deploy' (preview) {shown}",
@@ -319,3 +319,33 @@ def test_secret_values_never_reach_errors_or_the_audit_log(app_for, tmp_path):
     log = (tmp_path / "logs/audit.jsonl").read_text(encoding="utf-8")
     for leaked in ("hunter2", "4242", "TAIL", "abc"):
         assert leaked not in log, leaked
+
+
+@pytest.mark.asyncio
+async def test_approval_prompt_shows_defaults_and_normalized_values(app_for, tmp_path):
+    (tmp_path / "real-prod").mkdir()
+    (tmp_path / "staging").symlink_to("real-prod")
+    app = app_for(
+        ".PHONY: deploy\ndeploy:\n\t@true\n",
+        "schema_version: 1\ntasks:\n  deploy:\n    risk: dangerous\n    variables:\n"
+        "      ENV:\n        type: enum\n        values: [staging, production]\n"
+        "        default: production\n"
+        "      N:\n        type: integer\n      DIR:\n        type: path\n",
+    )
+    prompts = []
+
+    async def elicit(context, params):
+        prompts.append(params.message)
+        return types.ElicitResult(action="accept", content={"approve": False})
+
+    async with Client(
+        create_server(app, McpPresentation.GENERIC), elicitation_callback=elicit
+    ) as c:
+        await c.call_tool(
+            "run_task", {"task": "deploy", "variables": {"N": "+0_0_1", "DIR": "staging"}}
+        )
+
+    real = (tmp_path / "real-prod").resolve()
+    assert prompts == [
+        f'Approve dangerous Make target \'deploy\' with DIR="{real}", ENV="production", N="1"?'
+    ]
