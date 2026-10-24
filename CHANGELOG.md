@@ -31,6 +31,8 @@ All notable changes to Makefile MCP are documented here.
 
 ### Fixed
 
+- `pin` covers literal includes inside conditional blocks and follows symlinked directories
+  that stay in the repository; a pinned symlink that leaves it is a startup error.
 - Over MCP, probes for unknown or unexposed targets and unknown contexts are audited.
   The approval resolver used to fail them before the tool body ran, so nothing was recorded.
 - The approval prompt is shown only for calls that would run. A call with invalid or
