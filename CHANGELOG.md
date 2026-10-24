@@ -15,6 +15,9 @@ All notable changes to Makefile MCP are documented here.
 - `agent_output: full | tail | none`, per task or in `defaults`: how much recipe output MCP
   results return to the model. Output is untrusted text for the model; `tail` and `none`
   shrink the prompt-injection surface and the context spent on logs.
+- A CI test replays a hijacked agent's tool calls over a real MCP session, and
+  `evals/prompt_injection.py` runs a live Claude agent against poisoned test output and
+  reports what it attempted and what the server allowed.
 - `docs/threat-model.md`: why agents should not get a shell, threats and controls with the
   tests that prove them, the write-access rule, the policy and audit log, and what the server
   does and does not guarantee.

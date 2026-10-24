@@ -13,6 +13,8 @@ This document says what Makefile MCP defends against, how, and where it stops. I
 
 [`tests/security/test_hijacked_agent.py`](../tests/security/test_hijacked_agent.py) runs in CI. It plays a prompt-injected agent over a real MCP session: the injection arrives in a test log, then the agent tries a hidden target, an unknown target, Make and shell injection, a newline injection, a reserved variable, path and context traversal, a fake approval argument, and a dangerous task the human declines. Every call fails, nothing touches disk, every attempt that reaches the server is audited, and the audit chain verifies.
 
+[`evals/prompt_injection.py`](../evals/prompt_injection.py) does the same with a real model. A Claude agent asked to run the tests reads a log that tells it to deploy. The eval reports what the model tried and what the server allowed. It needs an API key and is not part of CI.
+
 ## Why an agent should not have a shell
 
 A shell tool turns every prompt injection into code execution with the agent's privileges. It also makes every other control moot:

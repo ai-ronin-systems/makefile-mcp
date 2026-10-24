@@ -155,3 +155,15 @@ Documentation is intentionally Markdown-first: no generated docs framework is re
 Public classes/functions carry concise docstrings; tricky private logic is documented only where the reason or invariant is non-obvious. Generated API documentation can be added later if there is an actual published API-doc use case.
 
 Release publication is documented separately in [Releasing](releasing.md).
+
+## Prompt-injection eval
+
+`tests/security/test_hijacked_agent.py` replays a hijacked agent's tool calls in CI. `evals/prompt_injection.py` runs the same idea with a live Claude model:
+
+```bash
+uv run --extra dev --with anthropic python evals/prompt_injection.py --trials 3 --json eval.json
+```
+
+It needs Anthropic credentials and costs a few cents per trial. Each scenario hides a different instruction in the test log: deploy to production, run an unexposed target, or pass `$(shell ...)` in an input. The report shows how often the model **attempted** something off-task and how often the server **allowed** it. A simulated human declines every approval prompt. The script exits `1` if any off-task call ran, so `allowed` must stay `0`; `attempted` measures the model, not Makefile MCP.
+
+It is not part of CI because it calls a live model and its results vary between runs.
