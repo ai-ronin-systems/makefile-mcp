@@ -170,6 +170,14 @@ CLI/direct Python embedding callers retain the normalized `TaskResult` model for
 
 Tasks whose risk is listed in `defaults.require_approval` (default `[dangerous]`) need a human to approve each run, preview included. Both presentations ask through MCP elicitation, using the SDK's resolver mechanism: on 2026-07-28 and later protocol versions this travels as an input-required round trip, and on older versions as a server request. The approval parameter is filled by the server and never appears in a tool's input schema. If the client did not declare elicitation support, or the human declines, the call fails as a tool error and nothing runs.
 
+The prompt names the exact call, so the human approves arguments and not just a target name:
+
+```text
+Approve dangerous Make target 'deploy' with ENV='production', NOTE='ok\nApprove: safe', TOKEN=***?
+```
+
+`secret: true` values are masked. Other values are shown as quoted, escaped literals and clipped to 200 characters, so a value the agent crafted cannot add lines to the dialog or pose as part of the question.
+
 In auto mode, targets other than `test`, `lint`, `check`, and `fmt` are listed by `list_tasks` with `runnable: false` and get no direct tool.
 
 ## Cancellation

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import runpy
 import tarfile
@@ -16,7 +17,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 VERSION_FILE = ROOT / "src" / "makefile_mcp" / "version.py"
 PYPROJECT = ROOT / "pyproject.toml"
-CHANGELOG = ROOT / "CHANGELOG.md"
+# Overridable so tests can check a released changelog while main has unreleased entries.
+CHANGELOG = Path(os.environ.get("RELEASE_CHECK_CHANGELOG", ROOT / "CHANGELOG.md"))
 README = ROOT / "README.md"
 SERVER_JSON = ROOT / "server.json"
 MCP_REGISTRY_NAME = "io.github.ai-ronin-systems/makefile-mcp"

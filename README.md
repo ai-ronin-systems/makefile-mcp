@@ -17,15 +17,18 @@ Makefile  →  Makefile MCP  →  Codex / Claude / LangChain / Cursor / VS Code 
 
 ## Threat model
 
+Design for a compromised agent: any text it reads can carry a prompt injection. Makefile MCP keeps the worst case short. A hijacked agent can run only the targets you listed, with values you typed, and a human approves the risky ones. **Read the [threat model](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/threat-model.md)** for the threats, controls, tests that prove them, and limits.
+
 | Protected | Not protected |
 | --- | --- |
 | Agents cannot run arbitrary shell commands, only exposed Make targets. | A malicious or buggy Makefile: recipes are trusted code, not sandboxed. |
 | Without config, agents can only run `test`, `lint`, `check`, and `fmt`. | A target the operator chose to expose doing something destructive. |
 | Governed mode runs only allow-listed `(context, target)` pairs with typed, validated inputs. | Host or container privileges granted outside Makefile MCP. |
 | `dangerous` tasks need explicit human approval through the MCP client; no approval, no run. | An MCP client that auto-approves elicitation without a human. |
-| Every governed run attempt, including approval refusals, can be written to an audit log, with secret inputs masked. | Secrets a recipe prints in ways that differ from the input value. |
+| Every governed run attempt, refused, approved, or cancelled, can be written to an audit log, with secret inputs masked. | Secrets a recipe prints in ways that differ from the input value. |
+| The approval prompt shows the exact arguments; agent-supplied text cannot reshape it. | An agent that can also edit the `Makefile` or its scripts: editing a recipe is a shell. |
 
-Details: [SECURITY.md](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/SECURITY.md) and [docs/security.md](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/security.md).
+Details: [threat model](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/threat-model.md), [SECURITY.md](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/SECURITY.md), and [security model](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/security.md).
 
 ## Quick start
 
@@ -176,19 +179,20 @@ Python 3.11+ · GNU Make · Linux or macOS
 
 ## Documentation
 
-1. [**Architecture**](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/architecture.md) — runtime flow, responsibilities, lifecycle, invariants, and dependency rules.
-2. [**Design rationale**](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/design_rationale.md) — key tradeoffs, full product-property map, and deliberately rejected alternatives.
-3. [**CLI reference**](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/cli.md) — commands, options, result model, root detection, and exit codes.
-4. [**Configuration**](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/configuration.md) — authoritative `.makefile-mcp.yaml` fields, defaults, approval, audit log, and precedence.
-5. [**Static Make discovery**](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/discovery.md) — supported syntax, fail-closed behavior, includes, limitations, and cache semantics.
-6. [**Governed mode**](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/governed_mode.md) — explicit exposure, typed inputs, risk metadata, human approval, and operating model.
-7. [**MCP presentations**](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/mcp_presentations.md) — `direct`, `generic`, `both`, schemas, result/error semantics, naming, and lifecycle.
-8. [**Contexts and capabilities**](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/contexts_and_capabilities.md) — monorepo scoping, `(context, target)` authorization, and semantic mappings.
-9. [**MCP client setup**](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/clients.md) — Codex, Claude Code, LangChain/LangGraph, Cursor, VS Code, and `uvx` examples.
-10. [**Security**](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/security.md) — trust boundary, Make input safety, arbitrary strings, discovery, environment/path controls, and execution bounds.
-11. [**Development**](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/development.md) — contributor workflows, code ownership, regression expectations, and Definition of Done.
-12. [**Deployment**](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/deployment.md) — Docker/stdio deployment, production checklist, and provisioning custom tools plus Makefiles.
-13. [**Releasing**](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/releasing.md) — version/tag contract, clean-package smoke test, PyPI Trusted Publishing, provenance, GitHub Releases, and MCP Registry metadata.
+1. [**Threat model**](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/threat-model.md) — why agents should not get a shell, threats and controls, the policy and audit log, guarantees and limits. Start here.
+2. [**Architecture**](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/architecture.md) — runtime flow, responsibilities, lifecycle, invariants, and dependency rules.
+3. [**Design rationale**](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/design_rationale.md) — key tradeoffs, full product-property map, and deliberately rejected alternatives.
+4. [**CLI reference**](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/cli.md) — commands, options, result model, root detection, and exit codes.
+5. [**Configuration**](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/configuration.md) — authoritative `.makefile-mcp.yaml` fields, defaults, approval, audit log, and precedence.
+6. [**Static Make discovery**](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/discovery.md) — supported syntax, fail-closed behavior, includes, limitations, and cache semantics.
+7. [**Governed mode**](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/governed_mode.md) — explicit exposure, typed inputs, risk metadata, human approval, and operating model.
+8. [**MCP presentations**](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/mcp_presentations.md) — `direct`, `generic`, `both`, schemas, result/error semantics, naming, and lifecycle.
+9. [**Contexts and capabilities**](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/contexts_and_capabilities.md) — monorepo scoping, `(context, target)` authorization, and semantic mappings.
+10. [**MCP client setup**](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/clients.md) — Codex, Claude Code, LangChain/LangGraph, Cursor, VS Code, and `uvx` examples.
+11. [**Security**](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/security.md) — trust boundary, Make input safety, arbitrary strings, discovery, environment/path controls, and execution bounds.
+12. [**Development**](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/development.md) — contributor workflows, code ownership, regression expectations, and Definition of Done.
+13. [**Deployment**](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/deployment.md) — Docker/stdio deployment, production checklist, and provisioning custom tools plus Makefiles.
+14. [**Releasing**](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/docs/releasing.md) — version/tag contract, clean-package smoke test, PyPI Trusted Publishing, provenance, GitHub Releases, and MCP Registry metadata.
 
 Security reporting: [SECURITY.md](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/SECURITY.md).
 Contributing: [CONTRIBUTING.md](https://github.com/ai-ronin-systems/makefile-mcp/blob/main/CONTRIBUTING.md).

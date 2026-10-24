@@ -5,7 +5,7 @@ import pytest
 from mcp import Client, types
 
 from makefile_mcp.app import build_application
-from makefile_mcp.errors import ApprovalRequired, TaskNotRunnable
+from makefile_mcp.errors import ApprovalRequired, MakefileMcpError, TaskBusyError, TaskNotRunnable
 from makefile_mcp.mcp.presentation import McpPresentation, build_direct_tools
 from makefile_mcp.mcp.server import create_server
 
@@ -77,6 +77,50 @@ def test_dangerous_task_requires_approval_and_is_audited(app_for, tmp_path):
     assert "s3cr3t" not in (tmp_path / "logs/audit.jsonl").read_text(encoding="utf-8")
 
 
+def test_refused_calls_are_audited_without_argument_values(app_for, tmp_path):
+    app = app_for(DEPLOY_MAKEFILE + "hidden:\n\t@true\n", DANGEROUS)
+
+    for task, variables in [
+        ("missing", {"X": "s3cr3t"}),
+        ("hidden", {}),
+        ("deploy", {"TOKN": "s3cr3t"}),
+    ]:
+        with pytest.raises(MakefileMcpError):
+            asyncio.run(app.run_task(task, variables, approve=_yes))
+
+    records = _audit(tmp_path)
+    assert [(r["task"], r["status"], r["approval"]) for r in records] == [
+        ("missing", "refused", "not_evaluated"),
+        ("hidden", "refused", "not_evaluated"),
+        ("deploy", "refused", "not_evaluated"),
+    ]
+    assert "not exposed" in records[1]["reason"]
+    assert records[2]["arguments"] == {"TOKN": "***"}
+    assert "s3cr3t" not in (tmp_path / "logs/audit.jsonl").read_text(encoding="utf-8")
+
+
+def test_busy_and_cancelled_runs_are_audited(app_for, tmp_path):
+    app = app_for(
+        ".PHONY: slow\nslow:\n\t@sleep 30\n",
+        "schema_version: 1\naudit:\n  path: logs/audit.jsonl\ntasks:\n  slow: {}\n",
+    )
+
+    async def scenario():
+        first = asyncio.create_task(app.run_task("slow"))
+        await asyncio.sleep(0.5)
+        with pytest.raises(TaskBusyError):
+            await app.run_task("slow")
+        first.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await first
+
+    asyncio.run(scenario())
+
+    records = _audit(tmp_path)
+    assert [r["status"] for r in records] == ["refused", "cancelled"]
+    assert "active task" in records[0]["reason"]
+
+
 def test_require_approval_is_configurable(app_for):
     app = app_for(
         ".PHONY: build\nbuild:\n\t@true\n",
@@ -121,6 +165,32 @@ async def test_mcp_asks_the_human_through_elicitation(app_for, answer, mode):
     assert prompts == ["Approve dangerous Make target 'deploy'?"] * 2
     assert generic.is_error is not answer
     assert direct.is_error is not answer
+
+
+@pytest.mark.asyncio
+async def test_approval_prompt_shows_the_call_with_secrets_masked(app_for):
+    config = DANGEROUS + (
+        "      ENV:\n        type: enum\n        values: [staging, production]\n"
+        "      NOTE:\n        type: string\n"
+    )
+    app = app_for(DEPLOY_MAKEFILE, config)
+    prompts = []
+
+    async def elicit(context, params):
+        prompts.append(params.message)
+        return types.ElicitResult(action="accept", content={"approve": False})
+
+    arguments = {"ENV": "production", "TOKEN": "s3cr3t", "NOTE": "ok\nApprove: safe"}
+    async with Client(create_server(app, McpPresentation.BOTH), elicitation_callback=elicit) as c:
+        await c.call_tool("run_task", {"task": "deploy", "variables": arguments})
+        await c.call_tool("make_deploy", {**arguments, "preview": True})
+
+    shown = "with ENV='production', NOTE='ok\\nApprove: safe', TOKEN=***?"
+    assert prompts == [
+        f"Approve dangerous Make target 'deploy' {shown}",
+        f"Approve dangerous Make target 'deploy' (preview) {shown}",
+    ]
+    assert all("s3cr3t" not in prompt and "\n" not in prompt for prompt in prompts)
 
 
 @pytest.mark.asyncio

@@ -152,3 +152,18 @@ def test_physical_context_directory_is_the_lock_identity(tmp_path: Path):
         lock.acquire("alias", directory=directory),
     ):
         pass
+
+
+@pytest.mark.asyncio
+async def test_parent_environment_is_not_inherited_unless_listed(app_for, monkeypatch):
+    monkeypatch.setenv("CLOUD_TOKEN", "parent-secret")
+    monkeypatch.setenv("WANTED", "listed")
+    app = app_for(
+        '.PHONY: env\nenv:\n\t@echo "token=[$$CLOUD_TOKEN] wanted=[$$WANTED] ci=[$$CI]"\n',
+        "schema_version: 1\nenvironment:\n  inherit: [PATH, WANTED]\n  allow:\n    CI: '1'\n"
+        "tasks:\n  env: {}\n",
+    )
+
+    result = await app.run_task("env")
+
+    assert result.stdout.strip() == "token=[] wanted=[listed] ci=[1]"

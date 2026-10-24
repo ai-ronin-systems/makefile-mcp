@@ -1,5 +1,6 @@
 """Orchestrate one authorized Make task through the bounded process boundary."""
 
+import asyncio
 import os
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
@@ -7,7 +8,12 @@ from pathlib import Path
 
 from makefile_mcp.audit import AuditLog
 from makefile_mcp.catalog import AUTO_RUN_TARGETS, Catalog, Contexts
-from makefile_mcp.errors import ApprovalRequired, ExecutionStartError, TaskNotRunnable
+from makefile_mcp.errors import (
+    ApprovalRequired,
+    ExecutionStartError,
+    MakefileMcpError,
+    TaskNotRunnable,
+)
 from makefile_mcp.filesystem import FileContextLock
 from makefile_mcp.inputs import make_variables, string_input_file, validate_variables
 from makefile_mcp.models import (
@@ -109,28 +115,45 @@ class TaskExecutor:
         preview: bool = False,
         approve: Approver | None = None,
     ) -> TaskResult:
-        """Execute one callable task and return a stable bounded result."""
-        task = self.catalog.describe(task_name, context)
-        if not task.runnable:
-            raise TaskNotRunnable(
-                f"auto mode only runs {', '.join(sorted(AUTO_RUN_TARGETS))}; "
-                f"govern {task.name!r} in .makefile-mcp.yaml to run it"
+        """Execute one callable task and return a stable bounded result.
+
+        Every attempt is audited, including refused, approval-denied, and cancelled calls.
+        """
+        try:
+            task = self.catalog.describe(task_name, context)
+            if not task.runnable:
+                raise TaskNotRunnable(
+                    f"auto mode only runs {', '.join(sorted(AUTO_RUN_TARGETS))}; "
+                    f"govern {task.name!r} in .makefile-mcp.yaml to run it"
+                )
+            project_context = self.contexts.resolve(context)
+            validated = validate_variables(
+                task,
+                variables or {},
+                root=self.root,
+                cwd=project_context.directory,
+                input_limit_bytes=self.config.defaults.input_limit_bytes,
             )
-        project_context = self.contexts.resolve(context)
-        validated = validate_variables(
-            task,
-            variables or {},
-            root=self.root,
-            cwd=project_context.directory,
-            input_limit_bytes=self.config.defaults.input_limit_bytes,
-        )
+        except MakefileMcpError as exc:
+            # Probing for hidden targets or malformed inputs is the signal an operator wants.
+            self.audit.refuse(task_name, context, variables or {}, reason=str(exc))
+            raise
         approval = await self._approval(task, approve)
         if approval in {"denied", "unavailable"}:
             self.audit.record(task, validated, approval=approval, preview=preview)
             raise ApprovalRequired(
                 f"{task.risk} task {task.name!r} needs human approval ({approval})"
             )
-        result = await self._execute(task, validated, project_context.directory, preview)
+        try:
+            result = await self._execute(task, validated, project_context.directory, preview)
+        except asyncio.CancelledError:
+            self.audit.record(
+                task, validated, approval=approval, preview=preview, status="cancelled"
+            )
+            raise
+        except MakefileMcpError as exc:
+            self.audit.record(task, validated, approval=approval, preview=preview, reason=str(exc))
+            raise
         self.audit.record(task, validated, approval=approval, result=result, preview=preview)
         return result
 

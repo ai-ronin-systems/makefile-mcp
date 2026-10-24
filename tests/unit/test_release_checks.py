@@ -1,7 +1,10 @@
 import io
+import os
+import re
 import subprocess
 import sys
 import tarfile
+import tempfile
 import zipfile
 from pathlib import Path
 
@@ -11,14 +14,26 @@ ROOT = Path(__file__).parents[2]
 SCRIPT = ROOT / "scripts" / "check_release.py"
 
 
-def _run_release_check(*args: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        [sys.executable, str(SCRIPT), *args],
-        cwd=ROOT,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+def _released_changelog() -> str:
+    """Return the repository changelog as it reads at release time: Unreleased emptied."""
+    text = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    return re.sub(r"## Unreleased\n.*?(?=\n## )", "## Unreleased\n", text, count=1, flags=re.S)
+
+
+def _run_release_check(
+    *args: str, changelog: str | None = None
+) -> subprocess.CompletedProcess[str]:
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "CHANGELOG.md"
+        path.write_text(_released_changelog() if changelog is None else changelog, "utf-8")
+        return subprocess.run(
+            [sys.executable, str(SCRIPT), *args],
+            cwd=ROOT,
+            env={**os.environ, "RELEASE_CHECK_CHANGELOG": str(path)},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
 
 
 def _write_fake_distributions(dist: Path, version: str = VERSION) -> None:
@@ -40,6 +55,14 @@ def test_release_check_accepts_repository_release_identity():
 
     assert result.returncode == 0
     assert "release-check: ok" in result.stdout
+
+
+def test_release_check_rejects_unreleased_changelog_entries():
+    changelog = _released_changelog().replace("## Unreleased\n", "## Unreleased\n\n- pending\n")
+    result = _run_release_check("--tag", f"v{VERSION}", changelog=changelog)
+
+    assert result.returncode == 2
+    assert "unreleased entries" in result.stdout
 
 
 def test_release_check_rejects_tag_version_mismatch():

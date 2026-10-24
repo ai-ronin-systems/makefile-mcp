@@ -2,13 +2,15 @@
 
 ## Supported version
 
-Before the first public release, security fixes target `main`. After publication, fixes target the latest published pre-1.0 release and the current development line as appropriate.
+Makefile MCP is pre-1.0. Security fixes ship in a new patch release of the latest minor version. Older releases are not patched; upgrade to the latest release.
 
 ## Security model
 
 Makefile MCP assumes repository Makefiles are trusted operator-controlled code. It constrains the MCP/CLI request boundary; it does not sandbox a trusted Make recipe.
 
-The complete threat model, including auto/governed exposure, human approval for risky tasks, the audit log, GNU Make input handling, arbitrary-string JSON transport, conservative discovery, path/environment controls, execution bounds, and deployment assumptions, is documented in [docs/security.md](docs/security.md).
+The threat model, written for reviewers deciding whether to connect an agent, is in [docs/threat-model.md](docs/threat-model.md): why agents should not get a shell, threats and controls with the tests that prove them, what the server does and does not guarantee, the policy file, and the audit log.
+
+Implementation details, including auto/governed exposure, human approval for risky tasks, the audit log, GNU Make input handling, arbitrary-string JSON transport, conservative discovery, path/environment controls, execution bounds, and deployment assumptions, are documented in [docs/security.md](docs/security.md).
 
 Governed exposure is documented separately in [docs/governed_mode.md](docs/governed_mode.md).
 
@@ -18,7 +20,7 @@ Use **GitHub Private Vulnerability Reporting** for security reports:
 
 <https://github.com/ai-ronin-systems/makefile-mcp/security/advisories/new>
 
-Repository owners must enable Private Vulnerability Reporting before the first public release. Do not open a public issue for an undisclosed vulnerability.
+Do not open a public issue for an undisclosed vulnerability.
 
 Include:
 

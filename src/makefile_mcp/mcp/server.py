@@ -25,6 +25,9 @@ from makefile_mcp.mcp.presentation import (
 from makefile_mcp.models import TaskDefinition
 from makefile_mcp.version import __version__
 
+# Longer argument values are clipped in the approval prompt.
+APPROVAL_VALUE_CHARS = 200
+
 READ_ONLY = ToolAnnotations(read_only_hint=True, open_world_hint=False)
 EXECUTE = ToolAnnotations(
     read_only_hint=False,
@@ -49,8 +52,44 @@ class Approval(BaseModel):
     approve: bool = Field(description="Allow this Make target to run now?")
 
 
+def _approval_message(
+    definition: TaskDefinition, arguments: dict[str, Any], *, preview: bool
+) -> str:
+    """Describe the exact call to the human, with secrets masked and values escaped.
+
+    Values come from the agent, so ``repr`` keeps a crafted string from faking extra lines.
+    """
+    label = definition.name
+    if definition.context != "root":
+        label = f"{definition.context}:{label}"
+    shown = []
+    for name, value in sorted(arguments.items()):
+        if value is None:
+            continue
+        spec = definition.variables.get(name)
+        if spec is not None and spec.secret:
+            shown.append(f"{name}=***")
+            continue
+        text = value if isinstance(value, str) else str(value)
+        if len(text) > APPROVAL_VALUE_CHARS:
+            text = text[:APPROVAL_VALUE_CHARS] + "..."
+        shown.append(f"{name}={text!r}")
+    message = f"Approve {definition.risk} Make target {label!r}"
+    if preview:
+        message += " (preview)"
+    if shown:
+        message += " with " + ", ".join(shown)
+    return message + "?"
+
+
 def _ask_approval(
-    app: Application, ctx: Context, task: str, context: str
+    app: Application,
+    ctx: Context,
+    task: str,
+    context: str,
+    arguments: dict[str, Any],
+    *,
+    preview: bool,
 ) -> Approval | Elicit[Approval] | None:
     """Decide whether to ask the human; ``None`` means the client cannot ask."""
     with _visible_errors():
@@ -60,8 +99,7 @@ def _ask_approval(
     capabilities = ctx.client_capabilities
     if capabilities is None or capabilities.elicitation is None:
         return None
-    label = task if context == "root" else f"{context}:{task}"
-    return Elicit(f"Approve {definition.risk} Make target {label!r}?", Approval)
+    return Elicit(_approval_message(definition, arguments, preview=preview), Approval)
 
 
 def _approver(outcome: ElicitationResult[Approval]) -> Approver | None:
@@ -99,8 +137,23 @@ async def _run_with_progress(
 def _progress_direct_callable(app: Application, direct: DirectTool) -> Any:
     """Wrap one generated direct tool with MCP Context progress, preserving its schema."""
 
-    async def ask(ctx: Context) -> Approval | Elicit[Approval] | None:
-        return _ask_approval(app, ctx, direct.task.name, direct.task.context)
+    async def ask(ctx: Context, **arguments: Any) -> Approval | Elicit[Approval] | None:
+        preview = bool(arguments.pop("preview", False))
+        return _ask_approval(
+            app, ctx, direct.task.name, direct.task.context, arguments, preview=preview
+        )
+
+    # The SDK passes tool arguments to a resolver by parameter name, so the resolver's
+    # signature lists the same task inputs as the tool and the prompt can show them.
+    ask.__signature__ = inspect.Signature(  # type: ignore[attr-defined]
+        [
+            inspect.Parameter("ctx", inspect.Parameter.KEYWORD_ONLY, annotation=Context),
+            *(
+                parameter.replace(kind=inspect.Parameter.KEYWORD_ONLY)
+                for parameter in inspect.signature(direct.fn).parameters.values()
+            ),
+        ]
+    )
 
     approval_annotation = Annotated[ElicitationResult[Approval], Resolve(ask)]
 
@@ -178,8 +231,14 @@ def _register_generic_tools(server: MCPServer, app: Application) -> None:
         with _visible_errors():
             return response_success(app.describe_task(task, context))
 
-    async def ask(ctx: Context, task: str, context: str) -> Approval | Elicit[Approval] | None:
-        return _ask_approval(app, ctx, task, context)
+    async def ask(
+        ctx: Context,
+        task: str,
+        context: str,
+        variables: dict[str, str] | None,
+        preview: bool,
+    ) -> Approval | Elicit[Approval] | None:
+        return _ask_approval(app, ctx, task, context, variables or {}, preview=preview)
 
     async def run_task(
         task: str,

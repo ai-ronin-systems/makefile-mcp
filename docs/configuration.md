@@ -275,8 +275,22 @@ audit:
   backup_count: 3                   # rotated files kept
 ```
 
-Optional. Appends one JSON line per run attempt, including refusals for missing approval:
-`timestamp`, `task`, `context`, `arguments` (secrets masked), `risk`, `approval` (`not_required`, `approved`, `denied`, `unavailable`), `preview`, `status` (`refused` when not run), `exit_code`, `duration_ms`, `output_bytes`, and `output_tail` (last 2000 characters, secrets masked). Requests rejected earlier (unknown task, invalid input) are not logged.
+Optional. Appends one JSON line per run attempt, whatever its outcome:
+
+| Field | Meaning |
+| --- | --- |
+| `timestamp`, `task`, `context` | what was asked and when |
+| `arguments` | declared inputs, `secret: true` values masked |
+| `risk` | the task's risk, or `null` if the task was never resolved |
+| `approval` | `not_required`, `approved`, `denied`, `unavailable`, or `not_evaluated` |
+| `status` | `passed`, `failed`, `error`, `timeout`, `refused`, or `cancelled` |
+| `reason` | why a call was refused, when it was |
+| `preview`, `exit_code`, `duration_ms` | how it ran |
+| `output_bytes`, `output_tail` | output size and the last 2000 characters, secrets masked |
+
+Calls refused before their inputs are validated (unknown or unexposed task, undeclared or invalid input) are recorded with `approval: not_evaluated` and argument **names only**: secrecy is not known yet, so no value is written. A call refused because its context is busy, and a run cancelled by the client, are recorded too.
+
+The log is evidence, not a tamper-proof record: recipes run as the same user and could rewrite it. Ship it off the host if you need integrity. See [Threat model](threat-model.md#audit-log).
 
 ## Exposure and presentation are not configuration keys
 

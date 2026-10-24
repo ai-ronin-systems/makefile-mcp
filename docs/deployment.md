@@ -241,6 +241,7 @@ make docker-check
 Before exposing a repository to an agent or orchestrator:
 
 - [ ] repository Makefiles, included Make code, wrapper scripts, and provisioned tools are trusted;
+- [ ] the agent cannot write those files, or exposed targets are acceptable to run agent-written code (see [the write-access rule](threat-model.md#the-write-access-rule));
 - [ ] `.makefile-mcp.yaml` is present for non-trivial or shared agent use;
 - [ ] `makefile-mcp doctor` exits cleanly;
 - [ ] callable task inventory and dangerous-risk declarations have been reviewed;
