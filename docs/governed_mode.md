@@ -143,7 +143,7 @@ dangerous
 
 Risk is advisory Makefile MCP metadata for clients. It is not authorization, does not imply read-only/idempotent/closed-world MCP behavior, and Makefile MCP does not infer it from target names. Omitted risk is `unknown`. Execution tools therefore use conservative MCP behavioral annotations independently of this field.
 
-Risk does drive one control: tasks whose risk is listed in `defaults.require_approval` (default `[dangerous]`) need explicit human approval before each run. Over MCP the server asks the human through elicitation; if the client cannot ask, the call is refused. See [Configuration](configuration.md#defaults).
+Risk does drive one control: tasks whose risk is listed in `defaults.require_approval` (default `[dangerous]`) need explicit human approval before each run. Over MCP the server asks the human through elicitation, showing the call's arguments with secrets masked; if the client cannot ask, the call is refused. See [Configuration](configuration.md#defaults).
 
 ## Execution limits
 

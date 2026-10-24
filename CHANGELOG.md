@@ -4,6 +4,12 @@ All notable changes to Makefile MCP are documented here.
 
 ## Unreleased
 
+### Changed
+
+- The approval prompt shows the call's arguments, so a human approves `deploy` with
+  `ENV='production'` rather than a bare target name. Secret values are masked; other values
+  are escaped and clipped so agent-supplied text cannot reshape the prompt.
+
 ### Fixed
 
 - The audit log records every run attempt. Calls refused before validation (unknown or

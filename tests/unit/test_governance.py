@@ -168,6 +168,32 @@ async def test_mcp_asks_the_human_through_elicitation(app_for, answer, mode):
 
 
 @pytest.mark.asyncio
+async def test_approval_prompt_shows_the_call_with_secrets_masked(app_for):
+    config = DANGEROUS + (
+        "      ENV:\n        type: enum\n        values: [staging, production]\n"
+        "      NOTE:\n        type: string\n"
+    )
+    app = app_for(DEPLOY_MAKEFILE, config)
+    prompts = []
+
+    async def elicit(context, params):
+        prompts.append(params.message)
+        return types.ElicitResult(action="accept", content={"approve": False})
+
+    arguments = {"ENV": "production", "TOKEN": "s3cr3t", "NOTE": "ok\nApprove: safe"}
+    async with Client(create_server(app, McpPresentation.BOTH), elicitation_callback=elicit) as c:
+        await c.call_tool("run_task", {"task": "deploy", "variables": arguments})
+        await c.call_tool("make_deploy", {**arguments, "preview": True})
+
+    shown = "with ENV='production', NOTE='ok\\nApprove: safe', TOKEN=***?"
+    assert prompts == [
+        f"Approve dangerous Make target 'deploy' {shown}",
+        f"Approve dangerous Make target 'deploy' (preview) {shown}",
+    ]
+    assert all("s3cr3t" not in prompt and "\n" not in prompt for prompt in prompts)
+
+
+@pytest.mark.asyncio
 async def test_mcp_refuses_when_client_cannot_elicit(app_for):
     app = app_for(DEPLOY_MAKEFILE, DANGEROUS)
 
