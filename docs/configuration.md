@@ -180,7 +180,7 @@ The first character must be alphanumeric.
 
 ### `integer`
 
-Parsed as base-10 integer and normalized before execution.
+Plain ASCII digits with an optional leading `-` (`-?[0-9]+`), normalized before execution (`-007` becomes `-7`). Signs like `+1`, separators like `1_000`, and non-ASCII digits are rejected. There is no range check; bound the value in the recipe if it matters.
 
 ### `boolean`
 
@@ -308,10 +308,10 @@ pin:
 
 Optional. Freezes trusted files at startup, the same way `.makefile-mcp.yaml` is frozen. If a pinned file changes, appears, or disappears, every later call fails closed with a restart-required error, and run attempts are audited as refused.
 
-- `make_sources` pins each context's `Makefile` and the literal includes discovery tracks.
-- `paths` are repository-relative files or directories. Directories are walked without following symlinks, and their listings are pinned too, so added or renamed files count as changes. A path outside the repository is a startup error.
+- `make_sources` pins each context's `Makefile` and its literal includes, including those inside conditional blocks. Files included from a conditionally included file are not tracked; list them in `paths`.
+- `paths` are repository-relative files or directories. Directories are walked, and their listings are pinned too, so added or renamed files count as changes. Symlinked directories are followed when they stay in the repository. A path, or a symlink, that leaves the repository is a startup error.
 
-Pinning is for agents that run trusted automation but must not change it. It detects changes through file metadata (size, timestamps including `ctime`, inode, symlink target), which a process running as the same user cannot reset. It does not cover files reached through dynamic includes, tools on `PATH`, or anything outside the pinned paths. See [Threat model](threat-model.md#the-write-access-rule).
+Pinning is for agents that run trusted automation but must not change it. It detects changes through file metadata (size, timestamps including `ctime`, inode, symlink target), which a process running as the same user cannot reset. It does not cover files reached through dynamic includes (`include $(VAR)`), tools on `PATH`, or anything outside the pinned paths. Pinning is checked before each call starts, so a change made while a task runs is caught by the next call, not the running one. See [Threat model](threat-model.md#the-write-access-rule).
 
 ## Exposure and presentation are not configuration keys
 

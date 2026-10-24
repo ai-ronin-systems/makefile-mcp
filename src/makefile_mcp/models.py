@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from makefile_mcp.syntax import (
     BOOLEAN_VALUES,
     CONTEXT_NAME_PATTERN,
+    INTEGER_PATTERN,
     MCP_CONTROL_PARAMETER_NAMES,
     RESERVED_MAKE_VARIABLES,
     SAFE_LITERAL_PATTERN,
@@ -117,11 +118,8 @@ class VariableSpec(StrictModel):
                 )
             if self.type == VariableType.ENUM and raw not in self.values:
                 raise ValueError("enum default must be one of values")
-            if self.type == VariableType.INTEGER:
-                try:
-                    int(raw, 10)
-                except ValueError as exc:
-                    raise ValueError("integer default must be an integer") from exc
+            if self.type == VariableType.INTEGER and not INTEGER_PATTERN.fullmatch(raw):
+                raise ValueError("integer default must be an integer")
             if self.type == VariableType.BOOLEAN and raw.lower() not in BOOLEAN_VALUES:
                 raise ValueError("boolean default must be a boolean value")
             # STRING defaults intentionally accept arbitrary text. They use the JSON

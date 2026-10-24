@@ -242,6 +242,12 @@ def _parse_source_file(
                 conditional_depth += 1
             elif _CONDITIONAL_END.match(stripped):
                 conditional_depth -= 1
+            elif include := _INCLUDE.match(stripped):
+                # Make may take this branch, so its literal includes are tracked for the cache
+                # and for `pin`, but never parsed: their targets stay undiscovered.
+                for token in _literal_include_paths(include.group("expression"), state.warnings):
+                    lexical = invocation_directory / token
+                    state.tracked_files += [str(lexical.absolute()), str(lexical.resolve())]
             continue
         if _CONDITIONAL_START.match(stripped):
             conditional_depth = 1

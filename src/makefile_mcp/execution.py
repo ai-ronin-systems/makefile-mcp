@@ -1,7 +1,9 @@
 """Orchestrate one authorized Make task through the bounded process boundary."""
 
 import asyncio
+import json
 import os
+import shutil
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -27,8 +29,37 @@ from makefile_mcp.models import (
 from makefile_mcp.process import SubprocessRunner
 from makefile_mcp.syntax import MAKEFILE_MCP_INPUT_VARIABLE
 
-# Asks a human whether one risky task may run. ``None`` means nobody can be asked.
-Approver = Callable[[TaskDefinition], Awaitable[bool]]
+# Asks a human whether one risky task may run, given its validated arguments. ``None`` means
+# nobody can be asked.
+Approver = Callable[[TaskDefinition, dict[str, str]], Awaitable[bool]]
+
+# Longer argument values are clipped in the approval question.
+APPROVAL_VALUE_CHARS = 200
+
+
+def describe_call(task: TaskDefinition, arguments: dict[str, str], *, preview: bool) -> str:
+    """Phrase the approval question for the exact call that would run.
+
+    *arguments* are validated values: defaults filled in, paths resolved, numbers normalized.
+    Secrets are masked. Values come from the agent, so they are JSON-quoted: a crafted value
+    cannot close its quotes, add lines, or hide characters such as bidirectional overrides.
+    """
+    label = task.name if task.context == "root" else f"{task.context}:{task.name}"
+    shown = []
+    for name, value in sorted(arguments.items()):
+        spec = task.variables.get(name)
+        if spec is not None and spec.secret:
+            shown.append(f"{name}=***")
+            continue
+        if len(value) > APPROVAL_VALUE_CHARS:
+            value = value[:APPROVAL_VALUE_CHARS] + "..."
+        shown.append(f"{name}={json.dumps(value)}")
+    question = f"Approve {task.risk} Make target {label!r}"
+    if preview:
+        question += " (preview)"
+    if shown:
+        question += " with " + ", ".join(shown)
+    return question + "?"
 
 
 def build_make_argv(
@@ -38,6 +69,7 @@ def build_make_argv(
     variables: dict[str, str],
     string_input_file: Path | None = None,
     preview: bool = False,
+    make: str = "make",
 ) -> list[str]:
     """Build the exact Make invocation from already-authorized, already-validated inputs."""
     assignments = [f"{key}={value}" for key, value in sorted(variables.items())]
@@ -48,12 +80,25 @@ def build_make_argv(
 
     # `-f` is security-relevant: discovery inspects `Makefile`, so execution must not let
     # GNU Make silently prefer a sibling `GNUmakefile` or lowercase `makefile` instead.
-    argv = ["make", "--no-print-directory"]
+    argv = [make, "--no-print-directory"]
     if preview:
         # GNU Make --dry-run is a preview, not a sandbox: Makefile expansion, remaking included
         # Makefiles, and recursive $(MAKE) recipes may still execute side effects.
         argv.append("--dry-run")
     return [*argv, "-f", str(makefile), task_name, *assignments]
+
+
+def resolve_make(env: dict[str, str]) -> str:
+    """Return the absolute path of GNU Make from the child PATH, skipping relative entries.
+
+    A relative entry such as ``.`` would resolve ``make`` inside the repository, where a
+    planted executable could stand in for GNU Make.
+    """
+    entries = env.get("PATH", os.defpath).split(os.pathsep)
+    found = shutil.which("make", path=os.pathsep.join(e for e in entries if os.path.isabs(e)))
+    if found is None:
+        raise ExecutionStartError("could not start Make: GNU Make not found on absolute PATH")
+    return found
 
 
 def build_environment(config: EnvironmentConfig) -> dict[str, str]:
@@ -98,13 +143,15 @@ class TaskExecutor:
         """Return whether policy requires a human to approve this task before it runs."""
         return task.risk in self.config.defaults.require_approval
 
-    async def _approval(self, task: TaskDefinition, approve: Approver | None) -> str:
+    async def _approval(
+        self, task: TaskDefinition, validated: dict[str, str], approve: Approver | None
+    ) -> str:
         """Return the approval outcome for one task: not_required, approved, denied, unavailable."""
         if not self.needs_approval(task):
             return "not_required"
         if approve is None:
             return "unavailable"
-        return "approved" if await approve(task) else "denied"
+        return "approved" if await approve(task, validated) else "denied"
 
     async def run(
         self,
@@ -136,9 +183,11 @@ class TaskExecutor:
             )
         except MakefileMcpError as exc:
             # Probing for hidden targets or malformed inputs is the signal an operator wants.
-            self.audit.refuse(task_name, context, variables or {}, reason=str(exc))
+            self.audit.refuse(
+                task_name, context, variables or {}, reason=f"{type(exc).__name__}: {exc}"
+            )
             raise
-        approval = await self._approval(task, approve)
+        approval = await self._approval(task, validated, approve)
         if approval in {"denied", "unavailable"}:
             self.audit.record(task, validated, approval=approval, preview=preview)
             raise ApprovalRequired(
@@ -183,6 +232,7 @@ class TaskExecutor:
             ):
                 # The JSON payload is intentionally scoped inside the execution lock and process
                 # lifetime. It cannot outlive the task or become shared mutable state.
+                env = build_environment(self.config.environment)
                 process = await self.runner.run(
                     argv=build_make_argv(
                         task.name,
@@ -190,10 +240,11 @@ class TaskExecutor:
                         variables=make_variables(task, validated),
                         string_input_file=payload_file,
                         preview=preview,
+                        make=resolve_make(env),
                     ),
                     cwd=directory,
                     timeout_seconds=task.timeout_seconds,
-                    env=build_environment(self.config.environment),
+                    env=env,
                     output_limit_bytes=self.config.defaults.output_limit_bytes,
                 )
         except ExecutionStartError as exc:

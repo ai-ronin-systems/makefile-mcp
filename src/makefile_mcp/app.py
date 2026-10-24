@@ -105,10 +105,12 @@ class Application:
             raise
         return await self.executor.run(task, variables, context, preview=preview, approve=approve)
 
-    def inputs_valid(self, task: TaskDefinition, variables: dict[str, str]) -> bool:
-        """Return whether *variables* pass *task*'s input contract, without running anything."""
+    def validated_inputs(
+        self, task: TaskDefinition, variables: dict[str, str]
+    ) -> dict[str, str] | None:
+        """Return *variables* as they would run, or ``None`` if they break the contract."""
         try:
-            validate_variables(
+            return validate_variables(
                 task,
                 variables,
                 root=self.root,
@@ -116,8 +118,7 @@ class Application:
                 input_limit_bytes=self.config.defaults.input_limit_bytes,
             )
         except MakefileMcpError:
-            return False
-        return True
+            return None
 
     def needs_approval(self, task: TaskDefinition) -> bool:
         """Return whether policy requires human approval before *task* runs."""
@@ -177,6 +178,30 @@ def build_application(start: Path | None = None, *, legacy_auto_run: bool = Fals
     )
 
 
+def _walk_pinned(root: Path, base: Path, entry: str) -> list[Path]:
+    """List everything under a pinned directory, following symlinked directories.
+
+    Directories are listed too, so added, removed, or renamed files are noticed. A symlinked
+    directory is followed when it stays in the repository, since recipes reach it the same way,
+    and refused when it leaves; each real directory is walked once, so cycles end.
+    """
+    found: list[Path] = []
+    seen: set[Path] = set()
+    for directory, subdirs, names in os.walk(base, followlinks=True):
+        real = Path(directory).resolve()
+        try:
+            ensure_within_root(root, real, must_exist=True)
+        except MakefileMcpError as exc:
+            raise ConfigurationError(f"invalid pin path {entry!r}: {exc}") from exc
+        if real in seen:
+            subdirs.clear()
+            continue
+        seen.add(real)
+        subdirs.sort()
+        found += [Path(directory, name) for name in (*subdirs, *names)]
+    return found
+
+
 def _pinned_paths(
     root: Path, config: MakefileMcpConfig, contexts: Contexts, catalog: Catalog
 ) -> tuple[Path, ...]:
@@ -195,8 +220,5 @@ def _pinned_paths(
             raise ConfigurationError(f"invalid pin path {entry!r}: {exc}") from exc
         paths.append(base)
         if base.is_dir():
-            # Directories are listed too, so added, removed, or renamed files are noticed.
-            for directory, subdirs, names in os.walk(base, followlinks=False):
-                subdirs.sort()
-                paths += [Path(directory, name) for name in (*subdirs, *names)]
+            paths += _walk_pinned(root, base, entry)
     return tuple(sorted(set(paths), key=str))

@@ -5,7 +5,7 @@ import pytest
 from mcp import Client, types
 
 from makefile_mcp.app import build_application
-from makefile_mcp.audit import line_hash, log_files, verify_chain
+from makefile_mcp.audit import _last_line, line_hash, log_files, verify_chain
 from makefile_mcp.errors import ApprovalRequired, MakefileMcpError, TaskBusyError, TaskNotRunnable
 from makefile_mcp.mcp.presentation import McpPresentation, build_direct_tools
 from makefile_mcp.mcp.server import create_server
@@ -27,11 +27,11 @@ DANGEROUS = (
 DEPLOY_MAKEFILE = ".PHONY: deploy\ndeploy:\n\t@cat $(MAKEFILE_MCP_INPUT)\n"
 
 
-async def _yes(task):
+async def _yes(task, arguments):
     return True
 
 
-async def _no(task):
+async def _no(task, arguments):
     return False
 
 
@@ -95,7 +95,8 @@ def test_refused_calls_are_audited_without_argument_values(app_for, tmp_path):
         ("hidden", "refused", "not_evaluated"),
         ("deploy", "refused", "not_evaluated"),
     ]
-    assert "not exposed" in records[1]["reason"]
+    assert records[1]["reason"].startswith("TaskNotExposed:")
+    assert records[0]["reason"].startswith("TaskNotFound:")
     assert records[2]["arguments"] == {"TOKN": "***"}
     assert "s3cr3t" not in (tmp_path / "logs/audit.jsonl").read_text(encoding="utf-8")
 
@@ -186,7 +187,7 @@ async def test_approval_prompt_shows_the_call_with_secrets_masked(app_for):
         await c.call_tool("run_task", {"task": "deploy", "variables": arguments})
         await c.call_tool("make_deploy", {**arguments, "preview": True})
 
-    shown = "with ENV='production', NOTE='ok\\nApprove: safe', TOKEN=***?"
+    shown = 'with ENV="production", NOTE="ok\\nApprove: safe", TOKEN=***?'
     assert prompts == [
         f"Approve dangerous Make target 'deploy' {shown}",
         f"Approve dangerous Make target 'deploy' (preview) {shown}",
@@ -269,3 +270,102 @@ async def test_agent_output_policy_narrows_what_reaches_the_model(app_for, polic
         assert len(stdout) <= (2100 if policy == "tail" else 10_000)
     assert failed.is_error and "exit code 2" in failed.content[0].text  # Make exits 2
     assert ("summary-bad" in failed.content[0].text) is (policy != "none")
+
+
+def test_oversized_calls_keep_audit_records_small_and_the_chain_intact(app_for, tmp_path):
+    app = app_for(
+        ".PHONY: test note\ntest:\n\t@echo ok\nnote:\n\t@true\n",
+        "schema_version: 1\naudit:\n  path: logs/audit.jsonl\n"
+        "tasks:\n  test: {}\n  note:\n    variables:\n      TEXT:\n        type: string\n",
+    )
+    asyncio.run(app.run_task("test"))
+    with pytest.raises(MakefileMcpError):
+        asyncio.run(app.run_task("x" * 200_000))
+    with pytest.raises(MakefileMcpError):
+        asyncio.run(app.run_task("test", {f"N{i}": "" for i in range(20_000)}))
+    # Large values are clipped in the record, never written whole.
+    asyncio.run(app.run_task("note", {"TEXT": "y" * 200_000}))
+    asyncio.run(app.run_task("test"))
+
+    lines = (tmp_path / "logs/audit.jsonl").read_text(encoding="utf-8").splitlines()
+    assert max(len(line) for line in lines) < 8_000
+    assert json.loads(lines[2])["arguments_omitted"] == 20_000 - 64
+    assert app.doctor().ok
+
+
+def test_audit_tail_reader_returns_a_whole_line_of_any_length(tmp_path):
+    log = tmp_path / "audit.jsonl"
+    long_line = "z" * 200_000
+    log.write_text(f"first\n{long_line}\n\n", encoding="utf-8")
+
+    assert _last_line(log) == long_line
+    assert _last_line(tmp_path / "missing.jsonl") is None
+
+
+def test_secret_values_never_reach_errors_or_the_audit_log(app_for, tmp_path):
+    app = app_for(
+        ".PHONY: login\nlogin:\n\t@cat $(MAKEFILE_MCP_INPUT); echo; echo $(PIN)\n",
+        "schema_version: 1\naudit:\n  path: logs/audit.jsonl\ntasks:\n  login:\n"
+        "    variables:\n      PIN:\n        type: integer\n        secret: true\n"
+        "      SHORT:\n        type: string\n        secret: true\n"
+        "      LONG:\n        type: string\n        secret: true\n",
+    )
+    with pytest.raises(MakefileMcpError) as refused:
+        asyncio.run(app.run_task("login", {"PIN": "hunter2"}))
+    assert "hunter2" not in str(refused.value) and "PIN" in str(refused.value)
+
+    # The JSON payload escapes the quote; a shorter secret is a prefix of a longer one.
+    asyncio.run(app.run_task("login", {"PIN": "4242", "SHORT": "abc", "LONG": 'abc-TAIL"q'}))
+
+    log = (tmp_path / "logs/audit.jsonl").read_text(encoding="utf-8")
+    for leaked in ("hunter2", "4242", "TAIL", "abc"):
+        assert leaked not in log, leaked
+
+
+@pytest.mark.asyncio
+async def test_approval_prompt_shows_defaults_and_normalized_values(app_for, tmp_path):
+    (tmp_path / "real-prod").mkdir()
+    (tmp_path / "staging").symlink_to("real-prod")
+    app = app_for(
+        ".PHONY: deploy\ndeploy:\n\t@true\n",
+        "schema_version: 1\ntasks:\n  deploy:\n    risk: dangerous\n    variables:\n"
+        "      ENV:\n        type: enum\n        values: [staging, production]\n"
+        "        default: production\n"
+        "      N:\n        type: integer\n      DIR:\n        type: path\n",
+    )
+    prompts = []
+
+    async def elicit(context, params):
+        prompts.append(params.message)
+        return types.ElicitResult(action="accept", content={"approve": False})
+
+    async with Client(
+        create_server(app, McpPresentation.GENERIC), elicitation_callback=elicit
+    ) as c:
+        await c.call_tool(
+            "run_task", {"task": "deploy", "variables": {"N": "007", "DIR": "staging"}}
+        )
+
+    real = (tmp_path / "real-prod").resolve()
+    assert prompts == [
+        f'Approve dangerous Make target \'deploy\' with DIR="{real}", ENV="production", N="7"?'
+    ]
+
+
+@pytest.mark.asyncio
+async def test_hidden_and_unknown_targets_look_the_same_to_the_agent(app_for):
+    app = app_for(
+        ".PHONY: test db-reset-prod\ntest:\n\t@true\ndb-reset-prod:\n\t@true\n",
+        "schema_version: 1\ntasks:\n  test: {}\n",
+    )
+
+    async with Client(create_server(app, McpPresentation.GENERIC)) as client:
+        hidden = await client.call_tool("describe_task", {"task": "db-reset-prod"})
+        unknown = await client.call_tool("describe_task", {"task": "db-reset-stag"})
+
+    assert hidden.is_error and unknown.is_error
+    texts = [
+        r.content[0].text.replace("db-reset-prod", "X").replace("db-reset-stag", "X")
+        for r in (hidden, unknown)
+    ]
+    assert texts[0] == texts[1]

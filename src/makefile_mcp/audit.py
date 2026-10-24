@@ -10,8 +10,26 @@ from makefile_mcp.models import AuditConfig, TaskDefinition, TaskResult
 
 MASK = "***"
 TAIL_CHARS = 2000
-# The newest lines sit in the last few KiB; records are bounded by TAIL_CHARS plus metadata.
-_TAIL_READ_BYTES = 64 * 1024
+# Every caller-controlled field is clipped, so one call cannot write a huge record: a flood of
+# refused calls would otherwise rotate real history away in seconds.
+NAME_CHARS = 256
+VALUE_CHARS = 1024
+REASON_CHARS = 1024
+MAX_ARGUMENT_NAMES = 64
+_READ_CHUNK = 64 * 1024
+
+
+def clip(text: str, limit: int) -> str:
+    """Return *text* cut to *limit* characters, marking the cut."""
+    return text if len(text) <= limit else text[:limit] + "...[clipped]"
+
+
+def _mask(text: str, secrets: list[str]) -> str:
+    """Mask each secret, its JSON-escaped form too, longest first so no fragment survives."""
+    forms = {form for secret in secrets for form in (secret, json.dumps(secret)[1:-1]) if form}
+    for form in sorted(forms, key=len, reverse=True):
+        text = text.replace(form, MASK)
+    return text
 
 
 def line_hash(line: str) -> str:
@@ -20,16 +38,25 @@ def line_hash(line: str) -> str:
 
 
 def _last_line(path: Path) -> str | None:
-    """Return the last non-empty line of *path*, or ``None`` when it has none."""
+    """Return the last non-empty line of *path* in full, or ``None`` when it has none.
+
+    Reads backwards until the line's start, so a record of any length chains correctly.
+    """
     try:
         with path.open("rb") as handle:
-            handle.seek(0, 2)
-            size = handle.tell()
-            handle.seek(max(0, size - _TAIL_READ_BYTES))
-            lines = handle.read().decode("utf-8", errors="replace").splitlines()
+            end = handle.seek(0, 2)
+            buffer = b""
+            while end > 0:
+                start = max(0, end - _READ_CHUNK)
+                handle.seek(start)
+                buffer = handle.read(end - start) + buffer
+                end = start
+                body = buffer.rstrip(b"\n")
+                if body and (b"\n" in body or end == 0):
+                    return body.rsplit(b"\n", 1)[-1].decode("utf-8", errors="replace")
     except FileNotFoundError:
         return None
-    return next((line for line in reversed(lines) if line.strip()), None)
+    return None
 
 
 def log_files(path: Path, backup_count: int) -> list[Path]:
@@ -95,15 +122,14 @@ class AuditLog:
             return
         secret_names = {name for name, spec in task.variables.items() if spec.secret}
         secrets = [value for name, value in arguments.items() if name in secret_names and value]
-        output = (result.stdout + result.stderr) if result else ""
-        for secret in secrets:
-            output = output.replace(secret, MASK)
+        output = _mask((result.stdout + result.stderr) if result else "", secrets)
         entry = {
             "timestamp": datetime.now(UTC).isoformat(),
             "task": task.name,
             "context": task.context,
             "arguments": {
-                name: MASK if name in secret_names else value for name, value in arguments.items()
+                name: MASK if name in secret_names else clip(value, VALUE_CHARS)
+                for name, value in arguments.items()
             },
             "risk": task.risk.value,
             "approval": approval,
@@ -115,7 +141,7 @@ class AuditLog:
             "output_tail": output[-TAIL_CHARS:],
         }
         if reason is not None:
-            entry["reason"] = reason
+            entry["reason"] = clip(_mask(reason, secrets), REASON_CHARS)
         self._write(entry)
 
     def refuse(self, task: str, context: str, arguments: object, *, reason: str) -> None:
@@ -126,18 +152,19 @@ class AuditLog:
         if self._path is None:
             return
         names = sorted(str(name) for name in arguments) if isinstance(arguments, dict) else []
-        self._write(
-            {
-                "timestamp": datetime.now(UTC).isoformat(),
-                "task": task,
-                "context": context,
-                "arguments": dict.fromkeys(names, MASK),
-                "risk": None,
-                "approval": "not_evaluated",
-                "status": "refused",
-                "reason": reason,
-            }
-        )
+        entry: dict[str, object] = {
+            "timestamp": datetime.now(UTC).isoformat(),
+            "task": clip(str(task), NAME_CHARS),
+            "context": clip(str(context), NAME_CHARS),
+            "arguments": {clip(name, NAME_CHARS): MASK for name in names[:MAX_ARGUMENT_NAMES]},
+            "risk": None,
+            "approval": "not_evaluated",
+            "status": "refused",
+            "reason": clip(reason, REASON_CHARS),
+        }
+        if len(names) > MAX_ARGUMENT_NAMES:
+            entry["arguments_omitted"] = len(names) - MAX_ARGUMENT_NAMES
+        self._write(entry)
 
     def _write(self, entry: dict[str, object]) -> None:
         """Chain *entry* to the newest record on disk, rotate if needed, and append it.

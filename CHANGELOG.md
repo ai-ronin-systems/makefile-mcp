@@ -24,12 +24,25 @@ All notable changes to Makefile MCP are documented here.
 
 ### Changed
 
-- The approval prompt shows the call's arguments, so a human approves `deploy` with
-  `ENV='production'` rather than a bare target name. Secret values are masked; other values
-  are escaped and clipped so agent-supplied text cannot reshape the prompt.
+- The approval prompt shows the call as it would run, so a human approves `deploy` with
+  `ENV="production"` rather than a bare target name: defaults filled in, values normalized,
+  paths resolved. Secret values are masked; other values are JSON-quoted and clipped so
+  agent-supplied text cannot reshape the prompt. The CLI asks the same question.
 
 ### Fixed
 
+- `integer` inputs accept plain ASCII digits with an optional `-` only; `+1`, `1_000`, and
+  non-ASCII digits were accepted and silently normalized.
+- Hidden and unknown targets return the same message, so an agent cannot list the
+  Makefile's unexposed targets by probing. The audit reason keeps the difference.
+- Make is resolved to an absolute path from the child `PATH`, ignoring relative entries such
+  as `.` that would run a `make` planted in the repository.
+- Oversized calls can no longer break or flood the audit log: caller-controlled fields are
+  clipped, argument names capped, and tool errors echoed to the model bounded.
+- Errors for `secret: true` variables never quote the value, so a mistyped secret no longer
+  reaches the agent or the audit log. Output tails mask JSON-escaped secrets too.
+- `pin` covers literal includes inside conditional blocks and follows symlinked directories
+  that stay in the repository; a pinned symlink that leaves it is a startup error.
 - Over MCP, probes for unknown or unexposed targets and unknown contexts are audited.
   The approval resolver used to fail them before the tool body ran, so nothing was recorded.
 - The approval prompt is shown only for calls that would run. A call with invalid or

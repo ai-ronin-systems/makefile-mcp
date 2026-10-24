@@ -10,6 +10,7 @@ from makefile_mcp.errors import VariableValidationError
 from makefile_mcp.filesystem import ensure_within_root
 from makefile_mcp.models import TaskDefinition, VariableSpec, VariableType
 from makefile_mcp.syntax import (
+    INTEGER_PATTERN,
     RESERVED_MAKE_VARIABLES,
     SAFE_LITERAL_PATTERN,
     SAFE_PATH_PATTERN,
@@ -46,10 +47,11 @@ def _convert_variable(spec: VariableSpec, raw: str, *, root: Path, cwd: Path) ->
     if spec.type == VariableType.TOKEN:
         return _safe_literal(raw, kind="token")
     if spec.type == VariableType.INTEGER:
-        try:
-            return str(int(raw, 10))
-        except ValueError as exc:
-            raise VariableValidationError(f"expected integer, got {raw!r}") from exc
+        # Plain ASCII digits only: int() alone also takes '+1_0' and non-ASCII digits, so the
+        # value a recipe receives could differ from anything a reviewer expects.
+        if not INTEGER_PATTERN.fullmatch(raw):
+            raise VariableValidationError(f"expected integer, got {raw!r}")
+        return str(int(raw, 10))
     if spec.type == VariableType.BOOLEAN:
         try:
             return "true" if parse_boolean_literal(raw) else "false"
@@ -114,7 +116,13 @@ def validate_variables(
         if name in RESERVED_MAKE_VARIABLES:
             raise VariableValidationError(f"reserved declared variable name: {name}")
         if name in supplied:
-            result[name] = _convert_variable(spec, supplied[name], root=root, cwd=cwd)
+            try:
+                result[name] = _convert_variable(spec, supplied[name], root=root, cwd=cwd)
+            except VariableValidationError as exc:
+                # Messages quote the rejected value; a secret's value must never reach the
+                # caller, the audit log, or any other error text.
+                detail = f"invalid {spec.type} value" if spec.secret else str(exc)
+                raise VariableValidationError(f"{name}: {detail}") from None
         elif spec.default is not None:
             result[name] = _convert_variable(spec, str(spec.default), root=root, cwd=cwd)
         elif spec.required:
