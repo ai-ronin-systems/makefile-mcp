@@ -4,6 +4,7 @@ import os
 import shutil
 from pathlib import Path
 
+from makefile_mcp.audit import log_files, verify_chain
 from makefile_mcp.catalog import Catalog, Contexts
 from makefile_mcp.errors import MakefileMcpError
 from makefile_mcp.models import (
@@ -174,6 +175,26 @@ def _capability_findings(
     return findings
 
 
+def _audit_findings(root: Path, config: MakefileMcpConfig) -> list[DoctorFinding]:
+    """Verify the audit log hash chain across its rotated files."""
+    if config.audit is None:
+        return []
+    files = log_files(root / config.audit.path, config.audit.backup_count)
+    try:
+        broken = verify_chain(files)
+    except (OSError, UnicodeDecodeError) as exc:
+        broken = f"could not read the audit log: {exc}"
+    if broken is None:
+        return []
+    return [
+        DoctorFinding(
+            code="audit.chain_broken",
+            severity=DoctorSeverity.ERROR,
+            message=f"audit log was edited or truncated: {broken}",
+        )
+    ]
+
+
 def run_doctor(
     *,
     root: Path,
@@ -206,6 +227,7 @@ def run_doctor(
     findings.extend(_duplicate_context_findings(contexts))
     findings.extend(_configured_task_findings(config, discovered_by_context))
     findings.extend(_capability_findings(config, exposed_anywhere))
+    findings.extend(_audit_findings(root, config))
 
     return DoctorResult(
         ok=not any(finding.severity == DoctorSeverity.ERROR for finding in findings),

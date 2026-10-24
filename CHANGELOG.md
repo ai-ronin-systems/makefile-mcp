@@ -10,6 +10,8 @@ All notable changes to Makefile MCP are documented here.
   startup. Any change makes every later call fail closed until restart, and the refused
   attempts are audited. This closes the gap where an agent that can edit Make code turns an
   exposed target into a shell.
+- Audit records are hash-chained (`prev_sha256`), across rotated files, and
+  `makefile-mcp doctor` reports an edited, removed, or inserted record.
 - `docs/threat-model.md`: why agents should not get a shell, threats and controls with the
   tests that prove them, the write-access rule, the policy and audit log, and what the server
   does and does not guarantee.
@@ -22,6 +24,8 @@ All notable changes to Makefile MCP are documented here.
 
 ### Fixed
 
+- The CLI and a server writing the same audit log no longer lose records on rotation: each
+  record is appended under a file lock instead of through a per-process open file.
 - The audit log records every run attempt. Calls refused before validation (unknown or
   unexposed task, undeclared or invalid input) are logged with argument names only, and busy
   or cancelled runs are logged with status `refused` or `cancelled`.

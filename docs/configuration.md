@@ -272,7 +272,7 @@ GNU Make and Makefile MCP control variables are rejected. Environment configurat
 audit:
   path: .makefile-mcp/audit.jsonl   # relative to the repository root
   max_bytes: 10485760               # rotate after this size
-  backup_count: 3                   # rotated files kept
+  backup_count: 3                   # rotated files kept; 0 never rotates
 ```
 
 Optional. Appends one JSON line per run attempt, whatever its outcome:
@@ -287,10 +287,13 @@ Optional. Appends one JSON line per run attempt, whatever its outcome:
 | `reason` | why a call was refused, when it was |
 | `preview`, `exit_code`, `duration_ms` | how it ran |
 | `output_bytes`, `output_tail` | output size and the last 2000 characters, secrets masked |
+| `prev_sha256` | SHA-256 of the previous line, or `null` for the first record |
 
 Calls refused before their inputs are validated (unknown or unexposed task, undeclared or invalid input) are recorded with `approval: not_evaluated` and argument **names only**: secrecy is not known yet, so no value is written. A call refused because its context is busy, and a run cancelled by the client, are recorded too.
 
-The log is evidence, not a tamper-proof record: recipes run as the same user and could rewrite it. Ship it off the host if you need integrity. See [Threat model](threat-model.md#audit-log).
+Records form a hash chain across rotated files. `makefile-mcp doctor` verifies it and reports `audit.chain_broken` when a record was edited, removed, or inserted. The CLI and a server can write the same log safely: each record is chained and appended under a file lock.
+
+The chain makes tampering evident, not impossible. Recipes run as the same user, so they could rewrite the whole log and recompute every hash. Ship records, or at least the latest `prev_sha256`, off the host if the log must hold up. See [Threat model](threat-model.md#audit-log).
 
 ## `pin`
 
