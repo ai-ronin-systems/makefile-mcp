@@ -175,7 +175,7 @@ What the policy cannot do, on purpose: define commands, chain tasks, or create t
 With `audit.path` set, each attempt appends one JSON line. A refused probe and an approved deploy look like this:
 
 ```json
-{"approval": "not_evaluated", "arguments": {"X": "***"}, "context": "root", "prev_sha256": "sha256:4e07...", "reason": "unknown Make target: missing", "risk": null, "status": "refused", "task": "missing", "timestamp": "2026-10-24T09:12:03.120481+00:00"}
+{"approval": "not_evaluated", "arguments": {"X": "***"}, "context": "root", "prev_sha256": "sha256:4e07...", "reason": "TaskNotFound: no callable Make target 'missing' in context 'root'", "risk": null, "status": "refused", "task": "missing", "timestamp": "2026-10-24T09:12:03.120481+00:00"}
 {"approval": "approved", "arguments": {"ENV": "production", "TOKEN": "***"}, "context": "root", "duration_ms": 8312, "exit_code": 0, "output_bytes": 2048, "output_tail": "...deployed 4f2c1a", "prev_sha256": "sha256:9b1f...", "preview": false, "risk": "dangerous", "status": "passed", "task": "deploy", "timestamp": "2026-10-24T09:14:41.877305+00:00"}
 ```
 

@@ -142,9 +142,12 @@ class Catalog:
         definition = snapshot.tasks.get(task)
         if definition:
             return definition
+        # One message for both cases, so callers cannot list the Makefile's hidden targets.
+        # The exception type keeps the difference for the audit log.
+        message = f"no callable Make target {task!r} in context {context!r}"
         if task in snapshot.discovered_targets:
-            raise TaskNotExposed(f"target exists but is not exposed in context {context!r}: {task}")
-        raise TaskNotFound(f"unknown Make target: {task}")
+            raise TaskNotExposed(message)
+        raise TaskNotFound(message)
 
     def resolve_capability(self, capability: str, context: str = "root") -> TaskDefinition:
         """Resolve a semantic capability name to a callable target in one context."""

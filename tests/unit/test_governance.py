@@ -95,7 +95,8 @@ def test_refused_calls_are_audited_without_argument_values(app_for, tmp_path):
         ("hidden", "refused", "not_evaluated"),
         ("deploy", "refused", "not_evaluated"),
     ]
-    assert "not exposed" in records[1]["reason"]
+    assert records[1]["reason"].startswith("TaskNotExposed:")
+    assert records[0]["reason"].startswith("TaskNotFound:")
     assert records[2]["arguments"] == {"TOKN": "***"}
     assert "s3cr3t" not in (tmp_path / "logs/audit.jsonl").read_text(encoding="utf-8")
 
@@ -349,3 +350,22 @@ async def test_approval_prompt_shows_defaults_and_normalized_values(app_for, tmp
     assert prompts == [
         f'Approve dangerous Make target \'deploy\' with DIR="{real}", ENV="production", N="1"?'
     ]
+
+
+@pytest.mark.asyncio
+async def test_hidden_and_unknown_targets_look_the_same_to_the_agent(app_for):
+    app = app_for(
+        ".PHONY: test db-reset-prod\ntest:\n\t@true\ndb-reset-prod:\n\t@true\n",
+        "schema_version: 1\ntasks:\n  test: {}\n",
+    )
+
+    async with Client(create_server(app, McpPresentation.GENERIC)) as client:
+        hidden = await client.call_tool("describe_task", {"task": "db-reset-prod"})
+        unknown = await client.call_tool("describe_task", {"task": "db-reset-stag"})
+
+    assert hidden.is_error and unknown.is_error
+    texts = [
+        r.content[0].text.replace("db-reset-prod", "X").replace("db-reset-stag", "X")
+        for r in (hidden, unknown)
+    ]
+    assert texts[0] == texts[1]

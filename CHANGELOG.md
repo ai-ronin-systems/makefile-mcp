@@ -31,6 +31,14 @@ All notable changes to Makefile MCP are documented here.
 
 ### Fixed
 
+- Hidden and unknown targets return the same message, so an agent cannot list the
+  Makefile's unexposed targets by probing. The audit reason keeps the difference.
+- Make is resolved to an absolute path from the child `PATH`, ignoring relative entries such
+  as `.` that would run a `make` planted in the repository.
+- Oversized calls can no longer break or flood the audit log: caller-controlled fields are
+  clipped, argument names capped, and tool errors echoed to the model bounded.
+- Errors for `secret: true` variables never quote the value, so a mistyped secret no longer
+  reaches the agent or the audit log. Output tails mask JSON-escaped secrets too.
 - `pin` covers literal includes inside conditional blocks and follows symlinked directories
   that stay in the repository; a pinned symlink that leaves it is a startup error.
 - Over MCP, probes for unknown or unexposed targets and unknown contexts are audited.

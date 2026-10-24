@@ -183,7 +183,9 @@ class TaskExecutor:
             )
         except MakefileMcpError as exc:
             # Probing for hidden targets or malformed inputs is the signal an operator wants.
-            self.audit.refuse(task_name, context, variables or {}, reason=str(exc))
+            self.audit.refuse(
+                task_name, context, variables or {}, reason=f"{type(exc).__name__}: {exc}"
+            )
             raise
         approval = await self._approval(task, validated, approve)
         if approval in {"denied", "unavailable"}:
