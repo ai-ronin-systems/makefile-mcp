@@ -29,7 +29,7 @@ _TOOL_COMPONENT = re.compile(r"[^A-Za-z0-9_.-]+")
 _MAX_TOOL_NAME = 128
 
 
-_MAX_MCP_ERROR_DIAGNOSTIC_BYTES = 8192
+MAX_MCP_ERROR_BYTES = 8192
 _MCP_DIAGNOSTIC_TRUNCATED = "\n[MCP diagnostic truncated]"
 _EXECUTOR_OUTPUT_TRUNCATED = "[task output truncated by executor]"
 # Characters of each stream kept by `agent_output: tail`, matching the audit log tail.
@@ -57,7 +57,7 @@ def shape_output(result: TaskResult, policy: AgentOutput) -> TaskResult:
     )
 
 
-def _bounded_utf8(text: str, *, max_bytes: int) -> str:
+def bounded_utf8(text: str, *, max_bytes: int) -> str:
     """Return text bounded by encoded UTF-8 bytes without splitting a code point."""
     encoded = text.encode("utf-8")
     if len(encoded) <= max_bytes:
@@ -136,7 +136,7 @@ def task_response(result: TaskResult, policy: AgentOutput = AgentOutput.FULL) ->
     # diagnostic, including caller-visible task/context identity, so an unusually long trusted
     # target or context cannot bypass the documented 8 KiB protocol budget. Full bounded task
     # output remains available to CLI/embedding callers.
-    raise TaskFailed(_bounded_utf8(summary, max_bytes=_MAX_MCP_ERROR_DIAGNOSTIC_BYTES))
+    raise TaskFailed(bounded_utf8(summary, max_bytes=MAX_MCP_ERROR_BYTES))
 
 
 def _slug(value: str) -> str:

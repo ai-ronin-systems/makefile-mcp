@@ -16,8 +16,10 @@ from makefile_mcp.app import Application, build_application
 from makefile_mcp.errors import MakefileMcpError
 from makefile_mcp.execution import Approver
 from makefile_mcp.mcp.presentation import (
+    MAX_MCP_ERROR_BYTES,
     DirectTool,
     McpPresentation,
+    bounded_utf8,
     build_direct_tools,
     response_success,
     task_response,
@@ -44,7 +46,8 @@ def _visible_errors() -> Iterator[None]:
     try:
         yield
     except MakefileMcpError as exc:
-        raise ToolError(str(exc)) from exc
+        # Errors can quote caller input, such as a multi-megabyte task name; bound the echo.
+        raise ToolError(bounded_utf8(str(exc), max_bytes=MAX_MCP_ERROR_BYTES)) from exc
 
 
 class Approval(BaseModel):

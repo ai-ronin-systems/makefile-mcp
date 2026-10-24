@@ -5,7 +5,7 @@ import pytest
 from mcp import Client, types
 
 from makefile_mcp.app import build_application
-from makefile_mcp.audit import line_hash, log_files, verify_chain
+from makefile_mcp.audit import _last_line, line_hash, log_files, verify_chain
 from makefile_mcp.errors import ApprovalRequired, MakefileMcpError, TaskBusyError, TaskNotRunnable
 from makefile_mcp.mcp.presentation import McpPresentation, build_direct_tools
 from makefile_mcp.mcp.server import create_server
@@ -269,3 +269,33 @@ async def test_agent_output_policy_narrows_what_reaches_the_model(app_for, polic
         assert len(stdout) <= (2100 if policy == "tail" else 10_000)
     assert failed.is_error and "exit code 2" in failed.content[0].text  # Make exits 2
     assert ("summary-bad" in failed.content[0].text) is (policy != "none")
+
+
+def test_oversized_calls_keep_audit_records_small_and_the_chain_intact(app_for, tmp_path):
+    app = app_for(
+        ".PHONY: test note\ntest:\n\t@echo ok\nnote:\n\t@true\n",
+        "schema_version: 1\naudit:\n  path: logs/audit.jsonl\n"
+        "tasks:\n  test: {}\n  note:\n    variables:\n      TEXT:\n        type: string\n",
+    )
+    asyncio.run(app.run_task("test"))
+    with pytest.raises(MakefileMcpError):
+        asyncio.run(app.run_task("x" * 200_000))
+    with pytest.raises(MakefileMcpError):
+        asyncio.run(app.run_task("test", {f"N{i}": "" for i in range(20_000)}))
+    # Large values are clipped in the record, never written whole.
+    asyncio.run(app.run_task("note", {"TEXT": "y" * 200_000}))
+    asyncio.run(app.run_task("test"))
+
+    lines = (tmp_path / "logs/audit.jsonl").read_text(encoding="utf-8").splitlines()
+    assert max(len(line) for line in lines) < 8_000
+    assert json.loads(lines[2])["arguments_omitted"] == 20_000 - 64
+    assert app.doctor().ok
+
+
+def test_audit_tail_reader_returns_a_whole_line_of_any_length(tmp_path):
+    log = tmp_path / "audit.jsonl"
+    long_line = "z" * 200_000
+    log.write_text(f"first\n{long_line}\n\n", encoding="utf-8")
+
+    assert _last_line(log) == long_line
+    assert _last_line(tmp_path / "missing.jsonl") is None
