@@ -3,6 +3,7 @@
 import asyncio
 import json
 import os
+import shutil
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
@@ -68,6 +69,7 @@ def build_make_argv(
     variables: dict[str, str],
     string_input_file: Path | None = None,
     preview: bool = False,
+    make: str = "make",
 ) -> list[str]:
     """Build the exact Make invocation from already-authorized, already-validated inputs."""
     assignments = [f"{key}={value}" for key, value in sorted(variables.items())]
@@ -78,12 +80,25 @@ def build_make_argv(
 
     # `-f` is security-relevant: discovery inspects `Makefile`, so execution must not let
     # GNU Make silently prefer a sibling `GNUmakefile` or lowercase `makefile` instead.
-    argv = ["make", "--no-print-directory"]
+    argv = [make, "--no-print-directory"]
     if preview:
         # GNU Make --dry-run is a preview, not a sandbox: Makefile expansion, remaking included
         # Makefiles, and recursive $(MAKE) recipes may still execute side effects.
         argv.append("--dry-run")
     return [*argv, "-f", str(makefile), task_name, *assignments]
+
+
+def resolve_make(env: dict[str, str]) -> str:
+    """Return the absolute path of GNU Make from the child PATH, skipping relative entries.
+
+    A relative entry such as ``.`` would resolve ``make`` inside the repository, where a
+    planted executable could stand in for GNU Make.
+    """
+    entries = env.get("PATH", os.defpath).split(os.pathsep)
+    found = shutil.which("make", path=os.pathsep.join(e for e in entries if os.path.isabs(e)))
+    if found is None:
+        raise ExecutionStartError("could not start Make: GNU Make not found on absolute PATH")
+    return found
 
 
 def build_environment(config: EnvironmentConfig) -> dict[str, str]:
@@ -215,6 +230,7 @@ class TaskExecutor:
             ):
                 # The JSON payload is intentionally scoped inside the execution lock and process
                 # lifetime. It cannot outlive the task or become shared mutable state.
+                env = build_environment(self.config.environment)
                 process = await self.runner.run(
                     argv=build_make_argv(
                         task.name,
@@ -222,10 +238,11 @@ class TaskExecutor:
                         variables=make_variables(task, validated),
                         string_input_file=payload_file,
                         preview=preview,
+                        make=resolve_make(env),
                     ),
                     cwd=directory,
                     timeout_seconds=task.timeout_seconds,
-                    env=build_environment(self.config.environment),
+                    env=env,
                     output_limit_bytes=self.config.defaults.output_limit_bytes,
                 )
         except ExecutionStartError as exc:
