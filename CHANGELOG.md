@@ -4,6 +4,12 @@ All notable changes to Makefile MCP are documented here.
 
 ## Unreleased
 
+### Added
+
+- `docs/threat-model.md`: why agents should not get a shell, threats and controls with the
+  tests that prove them, the write-access rule, the policy and audit log, and what the server
+  does and does not guarantee.
+
 ### Changed
 
 - The approval prompt shows the call's arguments, so a human approves `deploy` with

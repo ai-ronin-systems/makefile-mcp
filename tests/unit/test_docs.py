@@ -22,6 +22,7 @@ CANONICAL_DOCS = {
     "docs/contexts_and_capabilities.md",
     "docs/clients.md",
     "docs/security.md",
+    "docs/threat-model.md",
     "docs/deployment.md",
     "docs/development.md",
     "docs/releasing.md",

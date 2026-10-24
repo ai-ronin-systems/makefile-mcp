@@ -2,6 +2,8 @@
 
 Makefile MCP is a constrained execution boundary around **trusted repository automation**. It is not a sandbox for untrusted Makefiles.
 
+This page details how each control works. For threats, guarantees, limits, and the operator checklist, start with the [Threat model](threat-model.md).
+
 The repository and its Makefiles are trusted operator-controlled code. If `.makefile-mcp.yaml` exists, that configuration is trusted too. The untrusted side of the boundary is the MCP/CLI caller choosing callable operations and supplying declared inputs.
 
 ## Trust boundary

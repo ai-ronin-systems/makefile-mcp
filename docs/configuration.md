@@ -290,7 +290,7 @@ Optional. Appends one JSON line per run attempt, whatever its outcome:
 
 Calls refused before their inputs are validated (unknown or unexposed task, undeclared or invalid input) are recorded with `approval: not_evaluated` and argument **names only**: secrecy is not known yet, so no value is written. A call refused because its context is busy, and a run cancelled by the client, are recorded too.
 
-The log is evidence, not a tamper-proof record: recipes run as the same user and could rewrite it. Ship it off the host if you need integrity.
+The log is evidence, not a tamper-proof record: recipes run as the same user and could rewrite it. Ship it off the host if you need integrity. See [Threat model](threat-model.md#audit-log).
 
 ## Exposure and presentation are not configuration keys
 
