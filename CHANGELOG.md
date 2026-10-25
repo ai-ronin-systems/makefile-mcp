@@ -4,6 +4,11 @@ All notable changes to Makefile MCP are documented here.
 
 ## Unreleased
 
+### Security
+
+- Update the MCP Python SDK to 2.2.0 (exact pin) for CVE-2026-59951, and
+  `opentelemetry-api` to 1.45.1 for CVE-2026-114603.
+
 ### Added
 
 - `pin` policy: freeze each context's Makefile, tracked includes, and listed scripts at
