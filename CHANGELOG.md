@@ -4,6 +4,8 @@ All notable changes to Makefile MCP are documented here.
 
 ## Unreleased
 
+## 0.3.0 — 2026-10-25
+
 ### Security
 
 - Update the MCP Python SDK to 2.2.0 (exact pin) for CVE-2026-59951, and
